@@ -1,0 +1,509 @@
+// Aplikasi Manajemen Latihan Basket — Schema MVP
+// Diturunkan dari PRD Utama v1.1 Bab 12 (Model Data / Supabase)
+// Diterapkan pada MySQL/MariaDB (PRD Teknis v1.0 Bab 2) via Prisma 7.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ============================================================================
+// A. Pengguna & Akses
+// ============================================================================
+
+model Profile {
+  id                  String    @id @default(uuid())
+  fullName            String    @map("full_name")
+  role                UserRole  @default(ATHLETE)
+  email               String?   @unique
+  phone               String?
+  passwordHash        String?   @map("password_hash")
+  avatarUrl           String?   @map("avatar_url")
+  dateOfBirth         DateTime? @map("date_of_birth")
+  position            String? // Guard / Forward / Center / dll
+  heightCm            Float?    @map("height_cm")
+  weightKg            Float?    @map("weight_kg")
+  isMinor             Boolean?  @default(false) @map("is_minor")
+  parentConsentStatus String?   @map("parent_consent_status") // pending / approved / rejected
+  notes               String?
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  deletedAt           DateTime? @map("deleted_at") // soft delete (PRD Teknis)
+
+  sessions              ProfileSession[]
+  teamsCoached          Team[]              @relation("TeamCoach")
+  teamMemberships       TeamMember[]
+  drillsOwned           Drill[]             @relation("DrillOwner")
+  programsOwned         Program[]           @relation("ProgramOwner")
+  assessmentOwned       AssessmentPack[]    @relation("AssessmentOwner")
+  assessmentResults     AssessmentResult[]  @relation("AssessedAthlete")
+  assessmentConducted   AssessmentResult[]  @relation("AssessedBy")
+  sessionLogs           SessionLog[]
+  readinessRecords      AthleteReadiness[]  @relation("ReadinessAthlete")
+  readinessUpdated      AthleteReadiness[]  @relation("ReadinessUpdater")
+  injuriesRecorded      Injury[]            @relation("InjuryRecordedBy")
+  injuriesSuffered      Injury[]            @relation("InjuryAthlete")
+  announcementsAuthored Announcement[]
+  sessionComments       SessionComment[]
+  sharedReports         SharedReport[]
+  programAssignments    ProgramAssignment[]
+  personalSessions      Session[]           @relation("PersonalSessions")
+  relatedAsParent       ParentAthleteLink[] @relation("ParentLink")
+  relatedAsAthlete      ParentAthleteLink[] @relation("AthleteLink")
+
+  @@map("profiles")
+}
+
+// link Orang Tua/Wali ↔ Atlet (PRD Bab 5.6 & 7.1)
+model ParentAthleteLink {
+  id           String   @id @default(uuid())
+  parentId     String   @map("parent_id")
+  athleteId    String   @map("athlete_id")
+  relationship String // ayah / ibu / wali / dll
+  status       String   @default("active") // pending / active / revoked
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  parent  Profile @relation("ParentLink", fields: [parentId], references: [id], onDelete: Cascade, map: "fk_parent_link_parent")
+  athlete Profile @relation("AthleteLink", fields: [athleteId], references: [id], onDelete: Cascade, map: "fk_parent_link_athlete")
+
+  @@index([athleteId])
+  @@index([parentId])
+  @@map("parent_athlete_links")
+}
+
+// ============================================================================
+// B. Tim
+// ============================================================================
+
+model Team {
+  id          String    @id @default(uuid())
+  name        String
+  coachId     String    @map("coach_id")
+  description String?
+  seasonStart DateTime? @map("season_start")
+  seasonEnd   DateTime? @map("season_end")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  coach              Profile             @relation("TeamCoach", fields: [coachId], references: [id], map: "fk_team_coach")
+  members            TeamMember[]
+  programs           Program[]
+  programAssignments ProgramAssignment[] @relation("TeamProgramAssignments")
+  sessions           Session[]           @relation("TeamSessions", map: "fk_team_session")
+
+  @@index([coachId])
+  @@map("teams")
+}
+
+model TeamMember {
+  id           String   @id @default(uuid())
+  teamId       String   @map("team_id")
+  athleteId    String   @map("athlete_id")
+  roleInTeam   String   @default("player") @map("role_in_team") // player / assistant_coach
+  jerseyNumber String?  @map("jersey_number")
+  status       String   @default("active") // active / inactive
+  joinedAt     DateTime @default(now()) @map("joined_at")
+
+  team    Team    @relation(fields: [teamId], references: [id], onDelete: Cascade, map: "fk_team_member_team")
+  athlete Profile @relation(fields: [athleteId], references: [id], onDelete: Cascade, map: "fk_team_member_athlete")
+
+  @@unique([teamId, athleteId])
+  @@index([athleteId])
+  @@map("team_members")
+}
+
+// ============================================================================
+// C. Bank Materi Latihan (Drill Library)
+// ============================================================================
+
+model Drill {
+  id                 String   @id @default(uuid())
+  ownerId            String   @map("owner_id")
+  name               String
+  mainCategory       String   @map("main_category") // Fundamental Individu / Fisik & Atletis / Taktik & Tim / Mental & Game IQ
+  subCategory        String   @map("sub_category") // Ball Handling, Shooting, Footwork, dll
+  difficulty         String // pemula / menengah / lanjut
+  relevantPositions  Json     @map("relevant_positions") // ["Guard","Forward"] atau ["Semua"]
+  targetType         String   @map("target_type") // reps / time_sec / percentage / distance_m
+  defaultTargetValue Float?   @map("default_target_value")
+  description        String?
+  equipment          Json?
+  videoUrl           String?  @map("video_url")
+  variations         Json? // progresi mudah/sulit
+  isPublicTemplate   Boolean  @default(false) @map("is_public_template")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  owner           Profile          @relation("DrillOwner", fields: [ownerId], references: [id], map: "fk_drill_owner")
+  sessionDrills   SessionDrill[]
+  assessmentItems AssessmentItem[]
+
+  @@index([ownerId])
+  @@index([mainCategory])
+  @@map("drills")
+}
+
+// ============================================================================
+// D. Program Latihan & Periodisasi
+// ============================================================================
+
+model Program {
+  id          String    @id @default(uuid())
+  name        String
+  type        String    @default("personal") // personal / team
+  ownerId     String    @map("owner_id")
+  teamId      String?   @map("team_id")
+  description String?
+  startDate   DateTime? @map("start_date")
+  endDate     DateTime? @map("end_date")
+  status      String    @default("draft") // draft / active / completed / archived
+  isTemplate  Boolean   @default(false) @map("is_template")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  owner       Profile             @relation("ProgramOwner", fields: [ownerId], references: [id], map: "fk_program_owner")
+  team        Team?               @relation(fields: [teamId], references: [id], map: "fk_program_team")
+  assignments ProgramAssignment[]
+  phases      ProgramPhase[]
+  sessions    Session[]           @relation("ProgramSessions")
+
+  @@index([ownerId])
+  @@index([teamId])
+  @@map("programs")
+}
+
+model ProgramAssignment {
+  id         String   @id @default(uuid())
+  programId  String   @map("program_id")
+  athleteId  String?  @map("athlete_id") // null = berlaku untuk seluruh tim
+  teamId     String?  @map("team_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  program Program  @relation(fields: [programId], references: [id], onDelete: Cascade, map: "fk_program_assignment_program")
+  athlete Profile? @relation(fields: [athleteId], references: [id], onDelete: Cascade, map: "fk_program_assignment_athlete")
+  team    Team?    @relation("TeamProgramAssignments", fields: [teamId], references: [id], onDelete: Cascade, map: "fk_program_assignment_team")
+
+  @@index([programId])
+  @@index([athleteId])
+  @@index([teamId])
+  @@map("program_assignments")
+}
+
+model ProgramPhase {
+  id         String    @id @default(uuid())
+  programId  String    @map("program_id")
+  name       String // Pra-Musim / Kompetisi / Off-Season
+  orderIndex Int       @map("order_index")
+  startDate  DateTime? @map("start_date")
+  endDate    DateTime? @map("end_date")
+  focusNotes String?   @map("focus_notes")
+
+  program Program        @relation(fields: [programId], references: [id], onDelete: Cascade, map: "fk_program_phase_program")
+  cycles  ProgramCycle[]
+
+  @@index([programId])
+  @@map("program_phases")
+}
+
+model ProgramCycle {
+  id         String    @id @default(uuid())
+  phaseId    String    @map("phase_id")
+  name       String
+  weekNumber Int       @map("week_number")
+  startDate  DateTime? @map("start_date")
+  endDate    DateTime? @map("end_date")
+
+  phase    ProgramPhase @relation(fields: [phaseId], references: [id], onDelete: Cascade, map: "fk_program_cycle_phase")
+  sessions Session[]    @relation("CycleSessions")
+
+  @@index([phaseId])
+  @@map("program_cycles")
+}
+
+model Session {
+  id              String   @id @default(uuid())
+  programId       String   @map("program_id")
+  cycleId         String?  @map("cycle_id")
+  name            String
+  teamId          String?  @map("team_id") // utk sesi tim
+  athleteId       String?  @map("athlete_id") // utk sesi personal
+  scheduledAt     DateTime @map("scheduled_at")
+  durationMinutes Int      @map("duration_minutes")
+  location        String?
+  notes           String?
+  isOptional      Boolean  @default(false) @map("is_optional")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  program       Program          @relation("ProgramSessions", fields: [programId], references: [id], onDelete: Cascade, map: "fk_session_program")
+  cycle         ProgramCycle?    @relation("CycleSessions", fields: [cycleId], references: [id], map: "fk_session_cycle")
+  team          Team?            @relation("TeamSessions", fields: [teamId], references: [id], map: "fk_session_team")
+  athlete       Profile?         @relation("PersonalSessions", fields: [athleteId], references: [id], map: "fk_session_athlete")
+  sessionDrills SessionDrill[]
+  logs          SessionLog[]
+  comments      SessionComment[]
+
+  @@index([programId])
+  @@index([cycleId])
+  @@index([teamId])
+  @@index([athleteId])
+  @@index([scheduledAt])
+  @@map("sessions")
+}
+
+model SessionDrill {
+  id                String  @id @default(uuid())
+  sessionId         String  @map("session_id")
+  drillId           String  @map("drill_id")
+  orderIndex        Int     @map("order_index")
+  targetValue       Float?  @map("target_value")
+  targetUnit        String? @map("target_unit")
+  durationMinutes   Int?    @map("duration_minutes")
+  isMandatory       Boolean @default(true) @map("is_mandatory")
+  assignedAthleteId String? @map("assigned_athlete_id")
+  assignedPositions Json?   @map("assigned_positions")
+  notes             String?
+
+  session Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_session_drill_session")
+  drill   Drill         @relation(fields: [drillId], references: [id], map: "fk_session_drill_drill")
+  results DrillResult[]
+
+  @@index([sessionId])
+  @@index([drillId])
+  @@map("session_drills")
+}
+
+// ============================================================================
+// E. Asesmen Awal (Baseline) & Berkala
+// ============================================================================
+
+model AssessmentPack {
+  id          String   @id @default(uuid())
+  ownerId     String   @map("owner_id")
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  owner   Profile            @relation("AssessmentOwner", fields: [ownerId], references: [id], map: "fk_assessment_pack_owner")
+  items   AssessmentItem[]
+  results AssessmentResult[]
+
+  @@index([ownerId])
+  @@map("assessment_packs")
+}
+
+model AssessmentItem {
+  id                String  @id @default(uuid())
+  assessmentId      String  @map("assessment_id")
+  drillId           String  @map("drill_id")
+  orderIndex        Int     @map("order_index")
+  targetInstruction String? @map("target_instruction")
+
+  pack        AssessmentPack         @relation(fields: [assessmentId], references: [id], onDelete: Cascade, map: "fk_assessment_item_pack")
+  drill       Drill                  @relation(fields: [drillId], references: [id], map: "fk_assessment_item_drill")
+  resultItems AssessmentResultItem[]
+
+  @@index([assessmentId])
+  @@map("assessment_items")
+}
+
+model AssessmentResult {
+  id           String   @id @default(uuid())
+  assessmentId String   @map("assessment_id")
+  athleteId    String   @map("athlete_id")
+  conductedAt  DateTime @default(now()) @map("conducted_at")
+  isBaseline   Boolean  @default(true) @map("is_baseline")
+  notes        String?
+  conductedBy  String   @map("conducted_by")
+
+  assessment  AssessmentPack         @relation(fields: [assessmentId], references: [id], onDelete: Cascade, map: "fk_assessment_result_pack")
+  athlete     Profile                @relation("AssessedAthlete", fields: [athleteId], references: [id], map: "fk_assessment_result_athlete")
+  conductor   Profile                @relation("AssessedBy", fields: [conductedBy], references: [id], map: "fk_assessment_result_conductor")
+  resultItems AssessmentResultItem[]
+
+  @@index([assessmentId])
+  @@index([athleteId])
+  @@map("assessment_results")
+}
+
+model AssessmentResultItem {
+  id                 String  @id @default(uuid())
+  assessmentResultId String  @map("assessment_result_id")
+  assessmentItemId   String  @map("assessment_item_id")
+  actualValue        Float   @map("actual_value")
+  unit               String?
+  notes              String?
+
+  result AssessmentResult @relation(fields: [assessmentResultId], references: [id], onDelete: Cascade, map: "fk_assessment_result_item_result")
+  item   AssessmentItem   @relation(fields: [assessmentItemId], references: [id], map: "fk_assessment_result_item_item")
+
+  @@index([assessmentResultId])
+  @@map("assessment_result_items")
+}
+
+// ============================================================================
+// F. Tracking & Pelaksanaan
+// ============================================================================
+
+model SessionLog {
+  id                    String   @id @default(uuid())
+  sessionId             String   @map("session_id")
+  athleteId             String   @map("athlete_id")
+  attendanceStatus      String   @default("present") @map("attendance_status") // present / absent / late / excused
+  completed             Boolean  @default(false)
+  rpe                   Int? // 1–10 Rate of Perceived Exertion
+  durationActualMinutes Int?     @map("duration_actual_minutes")
+  athleteNotes          String?  @map("athlete_notes")
+  coachNotes            String?  @map("coach_notes")
+  loggedAt              DateTime @default(now()) @map("logged_at")
+
+  session      Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_session_log_session")
+  athlete      Profile       @relation(fields: [athleteId], references: [id], onDelete: Cascade, map: "fk_session_log_athlete")
+  drillResults DrillResult[]
+
+  @@unique([sessionId, athleteId])
+  @@index([athleteId])
+  @@index([loggedAt])
+  @@map("session_logs")
+}
+
+model DrillResult {
+  id             String  @id @default(uuid())
+  sessionLogId   String  @map("session_log_id")
+  sessionDrillId String  @map("session_drill_id")
+  actualValue    Float   @map("actual_value")
+  unit           String?
+  successCount   Int?    @map("success_count")
+  attemptCount   Int?    @map("attempt_count")
+  notes          String?
+
+  sessionLog   SessionLog   @relation(fields: [sessionLogId], references: [id], onDelete: Cascade, map: "fk_drill_result_log")
+  sessionDrill SessionDrill @relation(fields: [sessionDrillId], references: [id], map: "fk_drill_result_session_drill")
+
+  @@index([sessionLogId])
+  @@map("drill_results")
+}
+
+// ============================================================================
+// G. Manajemen Beban & Cedera (Load Management)
+// ============================================================================
+
+model Injury {
+  id                   String    @id @default(uuid())
+  athleteId            String    @map("athlete_id")
+  injuryType           String    @map("injury_type")
+  bodyPart             String    @map("body_part")
+  severity             String // ringan / sedang / berat
+  startDate            DateTime  @map("start_date")
+  expectedRecoveryDate DateTime? @map("expected_recovery_date")
+  status               String    @default("active") // active / recovered
+  notes                String?
+  recordedBy           String    @map("recorded_by")
+  createdAt            DateTime  @default(now()) @map("created_at")
+
+  athlete  Profile @relation("InjuryAthlete", fields: [athleteId], references: [id], onDelete: Cascade, map: "fk_injury_athlete")
+  recorder Profile @relation("InjuryRecordedBy", fields: [recordedBy], references: [id], map: "fk_injury_recorder")
+
+  @@index([athleteId])
+  @@map("injuries")
+}
+
+model AthleteReadiness {
+  id         String    @id @default(uuid())
+  athleteId  String    @map("athlete_id")
+  status     String // full / limited / rest
+  reason     String?
+  validFrom  DateTime  @default(now()) @map("valid_from")
+  validUntil DateTime? @map("valid_until")
+  updatedBy  String    @map("updated_by")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  athlete Profile @relation("ReadinessAthlete", fields: [athleteId], references: [id], onDelete: Cascade, map: "fk_readiness_athlete")
+  updater Profile @relation("ReadinessUpdater", fields: [updatedBy], references: [id], map: "fk_readiness_updater")
+
+  @@index([athleteId])
+  @@map("athlete_readiness")
+}
+
+// ============================================================================
+// H. Komunikasi & Berbagi Laporan
+// ============================================================================
+
+model Announcement {
+  id        String   @id @default(uuid())
+  authorId  String   @map("author_id")
+  teamId    String?  @map("team_id") // null = personal
+  athleteId String?  @map("athlete_id")
+  title     String
+  content   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  author Profile @relation(fields: [authorId], references: [id], onDelete: Cascade, map: "fk_announcement_author")
+
+  @@index([authorId])
+  @@index([teamId])
+  @@index([athleteId])
+  @@map("announcements")
+}
+
+model SessionComment {
+  id        String   @id @default(uuid())
+  sessionId String   @map("session_id")
+  authorId  String   @map("author_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_session_comment_session")
+  author  Profile @relation(fields: [authorId], references: [id], onDelete: Cascade, map: "fk_session_comment_author")
+
+  @@index([sessionId])
+  @@map("session_comments")
+}
+
+// Link share rapor read-only dengan masa berlaku (PRD Bab 5.3.2)
+model SharedReport {
+  id        String   @id @default(uuid())
+  slug      String   @unique // token acak utk URL share
+  createdBy String   @map("created_by")
+  title     String
+  summary   String? // ringkasan progres / JSON ringkas utk pihak luar
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  creator Profile @relation(fields: [createdBy], references: [id], onDelete: Cascade, map: "fk_shared_report_creator")
+
+  @@index([createdBy])
+  @@map("shared_reports")
+}
+
+// ============================================================================
+// I. Autentikasi (Session Cookie ringan utk MVP)
+// ============================================================================
+
+model ProfileSession {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  profileId String   @map("profile_id")
+  userAgent String?
+  ip        String?
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade, map: "fk_profile_session_profile")
+
+  @@index([profileId])
+  @@map("profile_sessions")
+}
+
+// ============================================================================
+// J. Role (enum aplikasi — nilai DB disimpan sebagai literal string)
+// ============================================================================
+
+enum UserRole {
+  COACH
+  ASSISTANT
+  ATHLETE
+  PARENT
+}
