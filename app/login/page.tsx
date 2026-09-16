@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
@@ -12,12 +12,6 @@ export default function LoginPage() {
     loginAction,
     {},
   );
-
-  useEffect(() => {
-    if (state.redirect) {
-      window.location.assign(state.redirect);
-    }
-  }, [state.redirect]);
 
   return (
     <main className="flex min-h-full items-center justify-center px-4 py-10">

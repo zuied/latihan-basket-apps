@@ -12,7 +12,6 @@ const loginSchema = z.object({
 
 export type LoginState = {
   error?: string;
-  redirect?: string;
 };
 
 export async function loginAction(
@@ -34,7 +33,7 @@ export async function loginAction(
 
   await createSession(user.id);
   revalidatePath("/", "layout");
-  return { redirect: ROLE_HOME[user.role] ?? "/" };
+  redirect(ROLE_HOME[user.role] ?? "/");
 }
 
 export async function logoutAction() {

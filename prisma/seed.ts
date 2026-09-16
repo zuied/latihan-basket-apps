@@ -83,6 +83,7 @@ async function main() {
     prisma.programCycle.deleteMany(),
     prisma.programPhase.deleteMany(),
     prisma.programAssignment.deleteMany(),
+    prisma.play.deleteMany(),
     prisma.program.deleteMany(),
     prisma.drill.deleteMany(),
     prisma.teamMember.deleteMany(),
@@ -132,6 +133,7 @@ async function main() {
           { id: "tm-dimas", athleteId: ATHLETE_DIMAS, roleInTeam: "player", jerseyNumber: "11" },
           { id: "tm-andi", athleteId: ATHLETE_ANDI, roleInTeam: "player", jerseyNumber: "13" },
           { id: "tm-fitri", athleteId: ATHLETE_FITRI, roleInTeam: "player", jerseyNumber: "15" },
+          { id: "tm-asst-fajar", athleteId: ASSISTANT_ID, roleInTeam: "assistant_coach", jerseyNumber: null },
         ],
       },
     },
@@ -232,6 +234,168 @@ async function main() {
       { id: "sd-3-3", sessionId: "ses-hari3", drillId: DRILL_FT, orderIndex: 3, targetValue: 75, targetUnit: "%", durationMinutes: 12 },
       { id: "sd-pr-1", sessionId: "ses-personal-raka", drillId: DRILL_BALL, orderIndex: 1, targetValue: 90, targetUnit: "detik", durationMinutes: 25 },
       { id: "sd-pr-2", sessionId: "ses-personal-raka", drillId: DRILL_DEFSLIDE, orderIndex: 2, targetValue: 8, targetUnit: "reps", durationMinutes: 20 },
+    ],
+  });
+
+  // ── Demo set plays (playbook) ──────────────────────────────────────
+  await prisma.play.createMany({
+    data: [
+      {
+        id: "play-pnr-1",
+        programId: PROGRAM_ID,
+        name: "Pick & Roll — Left Side",
+        description: "Pemain 1 menggiring ke kiri, pemain 5 pick, lalu roll ke ring. Guard siap terima for mid-range atau kick-out ke corner.",
+        tags: ["set play", "pick and roll"],
+        elements: [
+          { kind: "player", id: "p1", x: 250, y: 420, number: 1 },
+          { kind: "player", id: "p2", x: 120, y: 310, number: 2 },
+          { kind: "player", id: "p3", x: 380, y: 310, number: 3 },
+          { kind: "player", id: "p4", x: 100, y: 120, number: 4 },
+          { kind: "player", id: "p5", x: 200, y: 320, number: 5 },
+          { kind: "arrow", id: "a1", x1: 250, y1: 420, x2: 180, y2: 320 },
+          { kind: "arrow", id: "a2", x1: 200, y1: 300, x2: 220, y2: 160 },
+          { kind: "cut", id: "c1", x1: 120, y1: 310, x2: 100, y2: 80 },
+          { kind: "screen", id: "s1", x1: 185, y1: 335, x2: 215, y2: 305 },
+        ],
+      },
+      {
+        id: "play-123-1",
+        programId: PROGRAM_ID,
+        name: "1-2-3 Motion Cut",
+        description: "Pemain 1 ke sisi kanan, pemain 2 & 3 melakukan interchanging cut untuk mencari celah di paint.",
+        tags: ["motion", "team offense"],
+        elements: [
+          { kind: "player", id: "p1", x: 250, y: 430, number: 1 },
+          { kind: "player", id: "p2", x: 150, y: 260, number: 2 },
+          { kind: "player", id: "p3", x: 350, y: 260, number: 3 },
+          { kind: "player", id: "p4", x: 100, y: 100, number: 4 },
+          { kind: "player", id: "p5", x: 400, y: 100, number: 5 },
+          { kind: "arrow", id: "a1", x1: 250, y1: 430, x2: 350, y2: 380 },
+          { kind: "cut", id: "c1", x1: 150, y1: 260, x2: 200, y2: 100 },
+          { kind: "cut", id: "c2", x1: 350, y1: 260, x2: 300, y2: 100 },
+        ],
+      },
+    ],
+  });
+
+  // ── Perpustakaan template playbook (bawaan, isTemplate=true) ───────
+  // Template tidak terikat program (programId = null) agar bisa dipakai
+  // lintas tim melalui aksi "Gunakan template" (cloneIniPlay).
+  await prisma.play.createMany({
+    data: [
+      {
+        id: "tpl-give-go",
+        programId: null,
+        isTemplate: true,
+        name: "Give & Go (Kick ke Ring)",
+        description: "Pemain 1 oper ke 3 lalu cut ke ring, pemain 3 balas operan untuk layup.",
+        tags: ["give and go", "dasar"],
+        elements: [
+          { kind: "player", id: "p1", x: 250, y: 430, number: 1 },
+          { kind: "player", id: "p2", x: 140, y: 300, number: 2 },
+          { kind: "player", id: "p3", x: 360, y: 320, number: 3 },
+          { kind: "player", id: "p4", x: 100, y: 130, number: 4 },
+          { kind: "player", id: "p5", x: 400, y: 110, number: 5 },
+          { kind: "arrow", id: "a1", x1: 250, y1: 430, x2: 360, y2: 330 },
+          { kind: "cut", id: "c1", x1: 250, y1: 430, x2: 250, y2: 120 },
+          { kind: "arrow", id: "a2", x1: 360, y1: 320, x2: 250, y2: 130 },
+        ],
+      },
+      {
+        id: "tpl-horns",
+        programId: null,
+        isTemplate: true,
+        name: "Horns Set (Double Stack)",
+        description: "Dua big di elbow, guard masuk ke tengah lalu memilih passing drive atau handoff.",
+        tags: ["horns", "set play"],
+        elements: [
+          { kind: "player", id: "p1", x: 250, y: 430, number: 1 },
+          { kind: "player", id: "p2", x: 120, y: 320, number: 2 },
+          { kind: "player", id: "p3", x: 380, y: 320, number: 3 },
+          { kind: "player", id: "p4", x: 190, y: 200, number: 4 },
+          { kind: "player", id: "p5", x: 310, y: 200, number: 5 },
+          { kind: "arrow", id: "a1", x1: 250, y1: 430, x2: 250, y2: 300 },
+          { kind: "arrow", id: "a2", x1: 250, y1: 300, x2: 310, y2: 200 },
+          { kind: "screen", id: "s1", x1: 295, y1: 215, x2: 325, y2: 185 },
+          { kind: "cut", id: "c1", x1: 190, y1: 200, x2: 250, y2: 120 },
+        ],
+      },
+      {
+        id: "tpl-flex",
+        programId: null,
+        isTemplate: true,
+        name: "Flex Offense (Baseline Screen)",
+        description: "Pemain 2 cut lewat screen pemain 5; pemain 4 keluar ke wing menerima passing entrance.",
+        tags: ["flex", "motion"],
+        elements: [
+          { kind: "player", id: "p1", x: 250, y: 430, number: 1 },
+          { kind: "player", id: "p2", x: 120, y: 300, number: 2 },
+          { kind: "player", id: "p3", x: 380, y: 300, number: 3 },
+          { kind: "player", id: "p4", x: 420, y: 220, number: 4 },
+          { kind: "player", id: "p5", x: 180, y: 160, number: 5 },
+          { kind: "arrow", id: "a1", x1: 250, y1: 430, x2: 380, y2: 300 },
+          { kind: "screen", id: "s1", x1: 165, y1: 175, x2: 195, y2: 145 },
+          { kind: "cut", id: "c1", x1: 120, y1: 300, x2: 80, y2: 180 },
+          { kind: "cut", id: "c2", x1: 420, y1: 220, x2: 350, y2: 60 },
+        ],
+      },
+      {
+        id: "tpl-triangle",
+        programId: null,
+        isTemplate: true,
+        name: "Triangle (Triple Post)",
+        description: "Formasi segitiga populasi: guard + wing + post di sisi kuat, dua pemain di weak side.",
+        tags: ["triangle", "set play"],
+        elements: [
+          { kind: "player", id: "p1", x: 250, y: 430, number: 1 },
+          { kind: "player", id: "p2", x: 140, y: 290, number: 2 },
+          { kind: "player", id: "p3", x: 400, y: 190, number: 3 },
+          { kind: "player", id: "p4", x: 90, y: 120, number: 4 },
+          { kind: "player", id: "p5", x: 280, y: 110, number: 5 },
+          { kind: "arrow", id: "a1", x1: 250, y1: 430, x2: 400, y2: 200 },
+          { kind: "cut", id: "c1", x1: 140, y1: 290, x2: 210, y2: 140 },
+          { kind: "screen", id: "s1", x1: 265, y1: 125, x2: 295, y2: 95 },
+        ],
+      },
+      {
+        id: "tpl-double-screen",
+        programId: null,
+        isTemplate: true,
+        name: "Double Screen (Pin Down, STS)",
+        description: "Dua screen berurutan: pemain 1 keluar menembak, lalu pass-screen-pass (pin downs).",
+        tags: ["screen", "shooting"],
+        elements: [
+          { kind: "player", id: "p1", x: 250, y: 430, number: 1 },
+          { kind: "player", id: "p2", x: 120, y: 330, number: 2 },
+          { kind: "player", id: "p3", x: 350, y: 300, number: 3 },
+          { kind: "player", id: "p4", x: 190, y: 190, number: 4 },
+          { kind: "player", id: "p5", x: 310, y: 190, number: 5 },
+          { kind: "screen", id: "s1", x1: 175, y1: 205, x2: 205, y2: 175 },
+          { kind: "screen", id: "s2", x1: 295, y1: 205, x2: 325, y2: 175 },
+          { kind: "arrow", id: "a1", x1: 120, y1: 330, x2: 190, y2: 240 },
+          { kind: "cut", id: "c1", x1: 350, y1: 300, x2: 250, y2: 190 },
+          { kind: "cut", id: "c2", x1: 190, y1: 190, x2: 310, y2: 190 },
+        ],
+      },
+      {
+        id: "tpl-backscreen",
+        programId: null,
+        isTemplate: true,
+        name: "Backscreen & Kick-Out",
+        description: "Screen belakang untuk pemain 5 roll ke ring, pemain 3 siap mid-range, pemain 2 corner 3 poin.",
+        tags: ["screen", "kick out"],
+        elements: [
+          { kind: "player", id: "p1", x: 250, y: 430, number: 1 },
+          { kind: "player", id: "p2", x: 100, y: 300, number: 2 },
+          { kind: "player", id: "p3", x: 350, y: 330, number: 3 },
+          { kind: "player", id: "p4", x: 110, y: 130, number: 4 },
+          { kind: "player", id: "p5", x: 300, y: 140, number: 5 },
+          { kind: "arrow", id: "a1", x1: 250, y1: 430, x2: 350, y2: 330 },
+          { kind: "screen", id: "s1", x1: 285, y1: 155, x2: 315, y2: 125 },
+          { kind: "arrow", id: "a2", x1: 300, y1: 140, x2: 260, y2: 60 },
+          { kind: "cut", id: "c1", x1: 350, y1: 330, x2: 420, y2: 200 },
+        ],
+      },
     ],
   });
 
@@ -356,7 +520,7 @@ async function main() {
     },
   });
 
-  console.log(`Seeded: 8 profil, 1 tim (5 anggota), 8 drill, 2 program, 7 sesi, 2 asesmen baseline, 1 cedera, 2 pengumuman.`);
+  console.log(`Seeded: 8 profil, 1 tim (5 anggota), 8 drill, 2 program, 7 sesi, 2 asesmen baseline, 1 cedera, 2 pengumuman, 6 template play, 2 play demo.`);
 }
 
 main()
