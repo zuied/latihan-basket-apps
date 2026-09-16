@@ -1,26 +1,39 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { logoutAction } from "@/app/login/actions";
+import { AthleteBottomNav } from "@/components/nav/athlete-bottom-nav";
 import { cn } from "@/lib/cn";
 
 const NAV: Record<string, { label: string; href: string }[]> = {
   COACH: [
-    { label: "Dasbor", href: "/pelatih" },
-    { label: "Atlet", href: "/pelatih/atlet" },
+    { label: "Dashboard", href: "/pelatih" },
+    { label: "Tim & Atlet", href: "/pelatih/atlet" },
     { label: "Program", href: "/pelatih/program" },
+    { label: "Kalender", href: "/pelatih/kalender" },
+    { label: "Kehadiran", href: "/pelatih/kehadiran" },
+    { label: "Statistik", href: "/pelatih/statistik" },
     { label: "Drill", href: "/pelatih/drill" },
     { label: "Asesmen", href: "/pelatih/asesmen" },
+    { label: "Rapor", href: "/pelatih/rapor" },
+    { label: "Pengumuman", href: "/pengumuman" },
+    { label: "Pengaturan", href: "/pengaturan" },
   ],
   ASSISTANT: [
-    { label: "Dasbor", href: "/pelatih" },
-    { label: "Atlet", href: "/pelatih/atlet" },
+    { label: "Dashboard", href: "/pelatih" },
+    { label: "Tim & Atlet", href: "/pelatih/atlet" },
     { label: "Program", href: "/pelatih/program" },
+    { label: "Kalender", href: "/pelatih/kalender" },
+    { label: "Kehadiran", href: "/pelatih/kehadiran" },
+    { label: "Statistik", href: "/pelatih/statistik" },
     { label: "Asesmen", href: "/pelatih/asesmen" },
+    { label: "Pengumuman", href: "/pengumuman" },
+    { label: "Pengaturan", href: "/pengaturan" },
   ],
   ATHLETE: [
     { label: "Beranda", href: "/atlet" },
-    { label: "Kalender", href: "/atlet/kalender" },
-    { label: "Perkembangan", href: "/atlet/progres" },
+    { label: "Jadwal", href: "/atlet/kalender" },
+    { label: "Progres", href: "/atlet/progres" },
+    { label: "Pengaturan", href: "/pengaturan" },
   ],
   PARENT: [
     { label: "Beranda", href: "/orangtua" },
@@ -104,8 +117,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </form>
         </header>
 
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main className="flex-1 px-4 py-6 pb-20 sm:px-6 lg:px-8 lg:pb-6">{children}</main>
       </div>
+
+      {user.role === "ATHLETE" ? <AthleteBottomNav /> : null}
     </div>
   );
 }

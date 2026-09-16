@@ -169,6 +169,7 @@ model Program {
   assignments ProgramAssignment[]
   phases      ProgramPhase[]
   sessions    Session[]           @relation("ProgramSessions")
+  plays       Play[]
 
   @@index([ownerId])
   @@index([teamId])
@@ -273,6 +274,31 @@ model SessionDrill {
   @@index([sessionId])
   @@index([drillId])
   @@map("session_drills")
+}
+
+// ============================================================================
+// D1. Playbook — set play & diagram lapangan (layar ke-9)
+// ============================================================================
+
+// Play = satu set play (formasi awal + aksi sequential). elements disimpan
+// sebagai JSON: [{ step, action, ...coords }]. Lihat komponen playbook-editor.
+// isTemplate=true menandai play dari perpustakaan template bawaan,
+// programId = null untuk template agar bisa dipakai lintas tim.
+model Play {
+  id          String    @id @default(uuid())
+  programId   String?   @map("program_id")
+  name        String
+  description String?
+  tags        Json? // ["set play", "small ball"] dll
+  elements    Json      @default("[]")
+  isTemplate  Boolean   @default(false) @map("is_template")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  program Program? @relation(fields: [programId], references: [id], onDelete: Cascade, map: "fk_play_program")
+
+  @@index([programId])
+  @@map("plays")
 }
 
 // ============================================================================

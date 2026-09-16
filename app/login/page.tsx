@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
-import { FieldError, Input, Label } from "@/components/ui/field";
+import { Input, Label } from "@/components/ui/field";
 import { loginAction, type LoginState } from "./actions";
 
 export default function LoginPage() {
@@ -22,7 +22,7 @@ export default function LoginPage() {
           </div>
           <CardTitle className="mt-4">Aplikasi Latihan Basket</CardTitle>
           <CardDescription>
-            Masuk untuk mengelola program latihan, memantau atlet, dan melacak perkembangan.
+            Program Latihan Atlet Dan Tim Bola Basket.
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -1,78 +1,149 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, SectionTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/ui/stat-card";
 import { EmptyState } from "@/components/ui/empty-state";
 
-const dateTimeFormat = new Intl.DateTimeFormat("id-ID", {
+const WEEKDAY_DATE = new Intl.DateTimeFormat("id-ID", {
   weekday: "long",
   day: "numeric",
   month: "long",
-  hour: "2-digit",
-  minute: "2-digit",
 });
 
-const dateShort = new Intl.DateTimeFormat("id-ID", {
-  day: "numeric",
-  month: "short",
-});
-
-const READINESS_META: Record<string, { label: string; variant: "success" | "warning" | "danger" }> = {
+const READINESS_META: Record<
+  string,
+  { label: string; variant: "success" | "warning" | "danger" }
+> = {
   full: { label: "Siap penuh", variant: "success" },
   limited: { label: "Dibatasi", variant: "warning" },
   rest: { label: "Istirahat", variant: "danger" },
 };
 
+function greetingWord(): string {
+  const hour = new Date().getHours();
+  if (hour < 11) return "Selamat pagi";
+  if (hour < 15) return "Selamat siang";
+  if (hour < 19) return "Selamat sore";
+  return "Selamat malam";
+}
+
+function relativeTime(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return "Baru saja";
+  if (mins < 60) return `${mins} menit lalu`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} jam lalu`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "Kemarin";
+  return `${days} hari lalu`;
+}
+
 export default async function CoachDashboard() {
   const user = await requireUser();
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   const team = await prisma.team.findFirst({
     where: { coachId: user.id },
     include: {
-      sessions: {
-        where: { scheduledAt: { gte: new Date() } },
-        orderBy: { scheduledAt: "asc" },
-        take: 4,
-        include: { _count: { select: { sessionDrills: true } } },
-      },
       members: {
         where: { status: "active", athlete: { deletedAt: null } },
         include: {
           athlete: {
             include: {
               readinessRecords: {
-                where: { validUntil: { gte: new Date() } },
+                where: { validUntil: { gte: now } },
                 orderBy: { updatedAt: "desc" },
                 take: 1,
               },
+              injuriesSuffered: { where: { status: "active" } },
             },
           },
         },
       },
+      programs: {
+        where: { status: "active" },
+        select: { id: true },
+      },
     },
   });
 
-  const drillCount = await prisma.drill.count({ where: { ownerId: user.id } });
-
-  if (!team) {
-    notFound();
-  }
+  if (!team) notFound();
 
   const athleteCount = team.members.length;
-  const needsAttention = team.members.filter(
-    (member) =>
-      member.athlete.readinessRecords[0] &&
-      member.athlete.readinessRecords[0].status !== "full",
-  );
+  const activePrograms = team.programs.length;
+
+  const recentLogs = await prisma.sessionLog.findMany({
+    where: { session: { teamId: team.id }, loggedAt: { gte: weekAgo } },
+    select: { attendanceStatus: true },
+  });
+
+  const totalRecent = recentLogs.length;
+  const attendedRecent = recentLogs.filter(
+    (l) => l.attendanceStatus === "present" || l.attendanceStatus === "late",
+  ).length;
+  const compliancePercent =
+    totalRecent > 0 ? Math.round((attendedRecent / totalRecent) * 100) : null;
+
+  const needsAttention = team.members.filter((m) => {
+    const r = m.athlete.readinessRecords[0];
+    return (r && r.status !== "full") || m.athlete.injuriesSuffered.length > 0;
+  });
+
+  const feedLogs = await prisma.sessionLog.findMany({
+    where: { session: { teamId: team.id } },
+    orderBy: { loggedAt: "desc" },
+    take: 6,
+    include: {
+      athlete: { select: { fullName: true } },
+      session: { select: { name: true } },
+    },
+  });
+
+  const loadAlerts: {
+    athleteName: string;
+    detail: string;
+    severity: "warning" | "danger";
+  }[] = [];
+
+  for (const member of team.members) {
+    const r = member.athlete.readinessRecords[0];
+    if (r && r.status !== "full") {
+      loadAlerts.push({
+        athleteName: member.athlete.fullName,
+        detail: r.reason ?? `Status kesiapan: ${READINESS_META[r.status].label}`,
+        severity: r.status === "rest" ? "danger" : "warning",
+      });
+    }
+    for (const inj of member.athlete.injuriesSuffered) {
+      loadAlerts.push({
+        athleteName: member.athlete.fullName,
+        detail: `Cedera ${inj.bodyPart} (${inj.severity})`,
+        severity: inj.severity === "berat" ? "danger" : "warning",
+      });
+    }
+  }
+
+  const firstName = user.fullName.split(" ")[0];
 
   return (
     <div className="mx-auto max-w-6xl">
-      <SectionTitle
-        title={`Halo, ${user.fullName}`}
-        description={`Ringkasan tim ${team.name}.`}
-      />
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-h1 font-semibold tracking-tight">
+            {greetingWord()}, Coach {firstName}
+          </h1>
+          <p className="mt-1 text-small text-ink-soft">
+            Ringkasan hal yang perlu diperhatikan hari ini.
+          </p>
+        </div>
+        <Badge>{WEEKDAY_DATE.format(now)}</Badge>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -82,103 +153,169 @@ export default async function CoachDashboard() {
           tone="primary"
         />
         <StatCard
-          title="Sesi mendatang"
-          value={team.sessions.length}
-          hint={team.sessions[0] ? dateTimeFormat.format(team.sessions[0].scheduledAt) : "Belum ada"}
-          tone="success"
+          title="Tim berjalan"
+          value={activePrograms}
+          hint="Program aktif"
         />
-        <StatCard title="Drill tersedia" value={drillCount} tone="default" />
         <StatCard
-          title="Butuh perhatian"
+          title="Kepatuhan minggu ini"
+          value={compliancePercent !== null ? `${compliancePercent}%` : "—"}
+          hint={
+            compliancePercent !== null
+              ? compliancePercent >= 80
+                ? "On-track"
+                : "Perlu diperhatikan"
+              : "Belum ada data 7 hari terakhir"
+          }
+          tone={
+            compliancePercent !== null
+              ? compliancePercent >= 80
+                ? "success"
+                : "warning"
+              : "default"
+          }
+        />
+        <StatCard
+          title="Perlu perhatian"
           value={needsAttention.length}
-          hint={needsAttention.length > 0 ? "Atlet dengan kesiapan terbatas" : "Semua siap"}
-          tone="warning"
+          hint={
+            needsAttention.length > 0
+              ? needsAttention
+                  .map((m) => m.athlete.fullName.split(" ")[0])
+                  .join(", ")
+              : "Semua atlet siap"
+          }
+          tone={needsAttention.length > 0 ? "warning" : "success"}
         />
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
+      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.35fr_0.8fr]">
+        <Card>
           <CardHeader>
             <div>
-              <CardTitle>Sesi mendatang</CardTitle>
-              <CardDescription>{team.sessions.length} sesi berikutnya</CardDescription>
+              <CardTitle>Aktivitas terbaru</CardTitle>
+              <CardDescription>Ringkasan aktivitas atlet & tim</CardDescription>
             </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {team.sessions.length === 0 ? (
-              <EmptyState title="Belum ada sesi" description="Buat sesi latihan baru dari modul Program." />
+          <CardContent className="p-0">
+            {feedLogs.length === 0 ? (
+              <div className="px-5 py-6">
+                <EmptyState
+                  title="Belum ada aktivitas"
+                  description="Aktivitas akan muncul setelah sesi latihan dicatat."
+                />
+              </div>
             ) : (
-              team.sessions.map((session) => (
-                <div
-                  key={session.id}
-                  className="flex items-center justify-between gap-4 rounded-xl border border-line bg-panel px-4 py-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-small font-semibold">{session.name}</p>
-                    <p className="mt-0.5 text-tiny text-ink-soft">
-                      {session.location ?? "Lokasi belum diisi"}
-                    </p>
-                  </div>
-                  <div className="text-end">
-                    <p className="text-small font-medium">{dateTimeFormat.format(session.scheduledAt)}</p>
-                    <p className="text-tiny text-ink-faint">
-                      {session.durationMinutes} menit · {session._count.sessionDrills} drill
-                    </p>
-                  </div>
-                </div>
-              ))
+              <ul className="divide-y divide-line/70">
+                {feedLogs.map((log) => {
+                  const done = log.completed;
+                  const late = log.attendanceStatus === "late";
+                  const absent = log.attendanceStatus === "absent";
+                  return (
+                    <li
+                      key={log.id}
+                      className="flex items-center justify-between gap-3 px-5 py-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`flex size-8 shrink-0 items-center justify-center rounded-full text-tiny font-semibold ${
+                            done
+                              ? "bg-success-soft text-success-strong"
+                              : absent
+                                ? "bg-danger-soft text-danger-strong"
+                                : "bg-warning-soft text-warning"
+                          }`}
+                        >
+                          {log.athlete.fullName
+                            .split(" ")
+                            .map((p) => p[0])
+                            .slice(0, 2)
+                            .join("")
+                            .toUpperCase()}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-small font-medium">
+                            {log.athlete.fullName}
+                          </p>
+                          <p className="text-tiny text-ink-soft">
+                            {done
+                              ? `Menyelesaikan sesi ${log.session.name}`
+                              : late
+                                ? `Hadir terlambat di ${log.session.name}`
+                                : absent
+                                  ? `Absen pada sesi ${log.session.name}`
+                                  : `Mencatat hasil ${log.session.name}`}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="shrink-0 text-tiny text-ink-faint">
+                        {relativeTime(log.loggedAt)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-2">
+        <Card>
           <CardHeader>
             <div>
-              <CardTitle>Kesiapan atlet</CardTitle>
-              <CardDescription>Status terbaru berdasarkan pembaruan</CardDescription>
+              <CardTitle>Peringatan beban latihan</CardTitle>
+              <CardDescription>Atlet yang perlu dipantau</CardDescription>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
-            {team.members.length === 0 ? (
-              <EmptyState title="Belum ada atlet" description="Tambahkan atlet ke tim Anda." />
+            {loadAlerts.length === 0 ? (
+              <p className="text-small text-ink-soft">
+                Tidak ada peringatan aktif. Semua atlet dalam kondisi siap.
+              </p>
             ) : (
-              team.members.map((member) => {
-                const readiness = member.athlete.readinessRecords[0];
-                const meta = readiness ? READINESS_META[readiness.status] : undefined;
-                return (
-                  <div
-                    key={member.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-line px-4 py-3"
+              <>
+                {loadAlerts.map((alert, i) => (
+                  <Link
+                    key={`${alert.athleteName}-${i}`}
+                    href="/pelatih/atlet"
+                    className="flex items-start gap-3 rounded-xl border border-line bg-panel p-4 transition-colors hover:bg-neutral-soft"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="flex size-9 items-center justify-center rounded-full bg-neutral-soft text-small font-semibold">
-                        {member.athlete.fullName.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
-                      </span>
-                      <div>
-                        <p className="text-small font-semibold">{member.athlete.fullName}</p>
-                        <p className="text-tiny text-ink-faint">
-                          {member.athlete.position ?? "Posisi belum diisi"} · No {member.jerseyNumber}
+                    <span
+                      className={`mt-0.5 size-2 shrink-0 rounded-full ${
+                        alert.severity === "danger" ? "bg-danger" : "bg-warning"
+                      }`}
+                    />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-small font-semibold">
+                          {alert.athleteName}
                         </p>
+                        <Badge
+                          variant={
+                            alert.severity === "danger" ? "danger" : "warning"
+                          }
+                        >
+                          {alert.severity === "danger"
+                            ? "Perlu perhatian"
+                            : "Perlu ditinjau"}
+                        </Badge>
                       </div>
+                      <p className="mt-0.5 text-tiny text-ink-soft">
+                        {alert.detail}
+                      </p>
                     </div>
-                    {meta ? (
-                      <Badge variant={meta.variant}>{meta.label}</Badge>
-                    ) : (
-                      <Badge variant="success">Siap</Badge>
-                    )}
-                  </div>
-                );
-              })
+                  </Link>
+                ))}
+                <Link
+                  href="/pelatih/atlet"
+                  className="inline-flex items-center text-small font-medium text-primary hover:underline"
+                >
+                  Lihat profil atlet
+                </Link>
+              </>
             )}
           </CardContent>
         </Card>
       </div>
-
-      {team.sessions[0] ? (
-        <p className="mt-6 text-tiny text-ink-faint">
-          Sesi berikutnya: {dateTimeFormat.format(team.sessions[0].scheduledAt)} ({dateShort.format(team.sessions[0].scheduledAt)})
-        </p>
-      ) : null}
     </div>
   );
 }
