@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { resolveOwnerIds } from "@/lib/program-access";
 import { ProgramBuilder, type BuilderProgram, type BankDrill, type BuilderPlay } from "@/components/program/program-builder";
 import type { TemplatePlay } from "@/components/playbook/play-template-library";
 
@@ -159,9 +160,9 @@ const programQueryArgs = {
   },
 } as const;
 
-async function findPrograms(ownerId: string) {
+async function findPrograms(ownerIds: string[]) {
   return prisma.program.findMany({
-    where: { ownerId },
+    where: { ownerId: { in: ownerIds } },
     ...programQueryArgs,
     orderBy: [{ phases: { _count: "desc" } }, { createdAt: "desc" }],
   });
@@ -171,10 +172,12 @@ export default async function CoachProgramsPage() {
   const user = await requireUser();
   if (!["COACH", "ASSISTANT"].includes(user.role)) notFound();
 
+  const ownerIds = await resolveOwnerIds(user);
+
   const [rawPrograms, bank, templates] = await Promise.all([
-    findPrograms(user.id),
+    findPrograms(ownerIds),
     prisma.drill.findMany({
-      where: { ownerId: user.id },
+      where: { ownerId: { in: ownerIds } },
       orderBy: { name: "asc" },
       select: {
         id: true,

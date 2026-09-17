@@ -62,7 +62,7 @@ Sebagai konteks posisi produk, berikut gambaran singkat aplikasi sejenis yang su
 | Peran | Deskripsi | Kebutuhan Utama |
 |---|---|---|
 | **Pelatih (Coach/Admin)** | Pemilik akun utama, membuat & mengelola program | Membuat program, memantau semua atlet/tim, melihat laporan |
-| **Asisten Pelatih** | Membantu pelatih utama | Akses terbatas: input data latihan, lihat jadwal |
+| **Asisten Pelatih** | Membantu pelatih utama | Akses program & data tim yang dibina; input data latihan, kelola drill & sesi, kelola akses orang tua |
 | **Atlet Individu** | Berlatih secara personal (private coaching) | Lihat program pribadinya, catat hasil, lihat progres diri |
 | **Pemain dalam Tim** | Bagian dari roster tim | Lihat jadwal tim, program individu dalam tim, progres pribadi |
 | **(Opsional) Orang tua/Wali** | Memantau progres anak (untuk atlet muda) | Lihat ringkasan progres, jadwal |
@@ -124,6 +124,8 @@ Karena satu atlet bisa menjadi bagian dari tim sekaligus punya kebutuhan individ
 - **Lapisan Tim**: semua pemain menjalankan sesi latihan tim yang sama sesuai jadwal (misalnya latihan sore bersama).
 - **Lapisan Individu di dalam Tim**: di sesi yang sama atau sesi tambahan, setiap pemain bisa mendapat *tambahan drill personal* sesuai posisi/kelemahannya (mis. saat sesi tim ada waktu "individual skill block" 15 menit, isinya berbeda per pemain: guard mengerjakan ball handling, big mengerjakan post move).
 - Pelatih dapat menandai drill sebagai **wajib untuk semua** atau **khusus untuk atlet/posisi tertentu** saat menyusun sesi.
+- **Implementasi visual**: drill "wajib semua" ditampilkan dengan badge warna biru, sedangkan drill "individu per posisi" ditampilkan dengan badge warna ungu dan label posisi (Guard/Forward/Center). Pelatih dapat mengubah cakupan drill lewat tombol toggle di baris drill.
+- **Urutan drill**: pelatih dapat mengurutkan ulang drill dalam satu sesi menggunakan drag-and-drop (ikon grip di tiap baris drill).
 
 #### 5.1.4 Asesmen Awal (Baseline Assessment)
 
@@ -283,7 +285,7 @@ Karena tujuan utama produk adalah program yang **terukur, terencana, dan berhasi
 
 1. Apakah dibutuhkan aplikasi terpisah untuk atlet vs dashboard pelatih, atau cukup satu web app dengan tampilan berbeda per role?
 2. Metrik performa apa saja yang ingin dilacak secara default (shooting %, sprint time, vertical jump, dll)? Ini akan menentukan struktur data drill.
-3. Apakah ada kebutuhan multi-pelatih dalam satu tim (misalnya kepala pelatih + asisten) dengan hak akses berbeda?
+3. ~~Apakah ada kebutuhan multi-pelatih dalam satu tim (misalnya kepala pelatih + asisten) dengan hak akses berbeda?~~ **Sudah dijawab:** Ya, asisten pelatih bisa melihat dan mengelola program tim yang dibina, dengan hak akses yang sama dengan pelatih utama untuk program tim tersebut.
 4. Berapa perkiraan jumlah atlet/tim yang akan dikelola dalam 6–12 bulan pertama? (untuk estimasi skala teknis)
 
 ---
@@ -603,6 +605,7 @@ assessments
    - Atlet hanya bisa membaca/menulis data miliknya sendiri.
    - Orang tua hanya bisa membaca data anak yang terhubung melalui `parent_athlete_links`.
    - Pelatih hanya bisa mengakses data tim & atlet yang dia kelola.
+   - **Asisten pelatih** memiliki akses yang sama dengan pelatih utama untuk program, drill, dan sesi tim yang dibina (ditentukan melalui `team_members.role_in_team = 'assistant_coach'`). Asisten juga bisa mengelola akses orang tua untuk tim yang dibina.
 
 2. **Indexes** yang disarankan:  
    `(athlete_id, scheduled_at)`, `(program_id)`, `(session_id)`, `(team_id)`, `(owner_id)` pada tabel terkait.

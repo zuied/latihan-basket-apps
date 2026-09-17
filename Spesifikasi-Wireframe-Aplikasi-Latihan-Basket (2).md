@@ -25,7 +25,7 @@ Dokumen ini merujuk pada daftar 24 layar di Bab 6 PRD UI/UX. Enam layar priorita
 | 1 | Dashboard pelatih | Pelatih | Desktop | Selesai (draft) |
 | 2 | Beranda atlet | Atlet | Mobile | Selesai (draft) |
 | 3 | Sesi latihan aktif (input hasil) | Atlet | Mobile | Selesai (draft) |
-| 4 | Program builder | Pelatih | Desktop | Selesai (draft) |
+| 4 | Program builder | Pelatih, Asisten | Desktop | Selesai (hi-fi) — termasuk program berlapis, drag-drop, reorder, playbook |
 | 5 | Dashboard statistik individu | Pelatih, Atlet | Desktop | Selesai (draft) |
 | 6 | Onboarding & asesmen awal | Atlet | Mobile | Selesai (draft) |
 | 7 | Kalender jadwal | Pelatih, Atlet | Desktop | Selesai (draft) |
@@ -95,10 +95,17 @@ Kesepuluh layar ini dipilih sebagai prioritas pertama karena mewakili titik krit
 - Tab minggu di bagian atas untuk berpindah antar minggu tanpa keluar dari layar.
 - Blok "wajib semua" vs blok "individu per posisi" dipisahkan secara visual dengan badge warna berbeda per posisi — ini secara langsung menjawab kebutuhan **program berlapis** dari PRD utama Bab 5.1.3.
 - Ikon grip (titik tiga vertikal) pada setiap item drill menandakan bisa diurutkan ulang (drag-and-drop).
+- Tombol toggle di baris drill untuk mengubah cakupan: "Bagi per posisi" (wajib → posisi) atau "Wajib semua" (posisi → wajib).
+- Badge posisi: Guard → biru, Forward/Wing → ungu, Center/Big/Post → kuning.
+- Tombol "+" sebagai fallback untuk menambahkan drill ke sesi pertama minggu aktif.
+- Modal "Buat Program Baru" dengan pilihan tipe (Tim/Personal), tanggal mulai/akhir, dan deskripsi.
 
 **Alasan desain:** Bank materi latihan sengaja ditempatkan selalu terlihat di sisi kanan (bukan modal terpisah) supaya alur "cari drill → seret ke sesi" tidak terputus oleh perpindahan halaman — ini layar dengan kompleksitas tertinggi, jadi meminimalkan jumlah klik/pindah konteks jadi prioritas.
 
-**Isu terbuka untuk hi-fi:** Perlu diuji apakah pola drag-and-drop nyaman dipakai, atau perlu alternatif tombol "+" (tap untuk tambah) sebagai fallback bagi pengguna yang kurang terbiasa drag-and-drop. Juga perlu dirancang versi mobile yang disederhanakan (lihat PRD UI/UX Bab 10).
+**Status:** Isu terbuka untuk hi-fi sudah dijawab:
+- ✅ Fallback tombol "+" sudah diimplementasikan untuk pengguna yang kurang terbiasa drag-and-drop.
+- ✅ Grip icon sudah berfungsi untuk mengurutkan ulang drill dalam satu blok.
+- ⏳ Versi mobile masih perlu dirancang (lihat PRD UI/UX Bab 10).
 
 ---
 
@@ -246,7 +253,7 @@ Merujuk ke 24 layar di PRD UI/UX Bab 6, berikut yang masih tersisa untuk iterasi
 - Halaman berbagi rapor untuk orang tua/wali
 - Pengumuman/broadcast
 - Komentar per sesi latihan
-- Pengaturan akun & kelola akses
+- Pengaturan akun & kelola akses ✅ (asisten bisa mengelola akses orang tua)
 - Rekomendasi otomatis (Fase 2)
 
 ---

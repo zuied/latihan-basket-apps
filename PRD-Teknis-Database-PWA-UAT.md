@@ -117,6 +117,9 @@ Skenario disusun mengikuti alur kunci yang sudah didefinisikan di PRD UI/UX Bab 
 | 8 | Sistem mendeteksi lonjakan beban latihan seorang atlet dan menampilkan peringatan | Pelatih | Peringatan muncul jelas di Dashboard & Profil Atlet, tidak terasa seperti error mengagetkan |
 | 9 | Atlet menginstal aplikasi ke layar utama HP (PWA) dan membukanya dalam mode standalone | Atlet | Prompt instalasi muncul, aplikasi terbuka tanpa address bar browser |
 | 10 | Pelatih menyusun sesi dengan **program berlapis** (drill wajib semua vs drill khusus posisi) dan atlet menjalankannya | Pelatih, Atlet | Atlet hanya melihat instruksi yang relevan untuk dirinya, tidak bingung dengan instruksi rekan setim |
+| 11 | **Asisten pelatih** login dan melihat program tim yang dibina, lalu menambahkan drill ke sesi | Asisten | Program & drill milik pelatih utama terlihat; asisten bisa menambah/mengubah drill tanpa error |
+| 12 | Pelatih/asisten **mengurutkan ulang drill** dalam satu sesi menggunakan drag-and-drop (ikon grip) | Pelatih/Asisten | Urutan drill berubah sesuai drag, persisten setelah reload |
+| 13 | Asisten pelatih **mengelola akses orang tua** (undang/aktifkan/cabut) lewat Pengaturan | Asisten | Akses orang tua berhasil dikelola; pelatih utama juga bisa melihat perubahan |
 
 ### 4.4 Proses & Jadwal UAT
 

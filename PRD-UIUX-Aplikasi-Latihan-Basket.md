@@ -145,8 +145,21 @@ Ini adalah interaksi dengan frekuensi tertinggi di seluruh aplikasi. Perlu diran
 **C. Alur program builder (fase → minggu → sesi → drill)**
 Ini fitur dengan kompleksitas tertinggi. Perlu pola UI yang bisa menangani struktur bertingkat tanpa terasa berat — pertimbangkan pola drag-and-drop, tarik dari drill library ke slot sesi, dan preview kalender langsung ter-update.
 
+**Implementasi saat ini:**
+- Layout dua kolom: kiri (struktur program), kanan (bank materi latihan).
+- Tab minggu di bagian atas untuk berpindah antar minggu.
+- Drag-and-drop dari bank materi ke sesi (dengan fallback tombol "+" untuk layar sentuh).
+- Ikon grip pada tiap baris drill untuk mengurutkan ulang drill dalam satu blok (wajib/posisi).
+- Modal "Buat Program Baru" dengan pilihan tipe (Tim/Personal) dan tanggal otomatis.
+
 **D. Alur "program berlapis" (drill wajib semua vs drill khusus posisi/individu dalam sesi tim)**
 Perlu visual yang jelas membedakan mana bagian sesi yang sama untuk semua pemain dan mana yang personal, baik di sisi pelatih (saat menyusun) maupun atlet (saat menjalankan) — supaya atlet tidak bingung kenapa instruksinya berbeda dari rekan setimnya.
+
+**Implementasi saat ini:**
+- Setiap sesi dipecah menjadi dua blok visual: "Wajib semua" (badge biru) dan "Individu per posisi" (badge ungu).
+- Tiap drill menampilkan badge posisi (Guard → biru, Forward/Wing → ungu, Center/Big/Post → kuning).
+- Tombol toggle di baris drill: "Bagi per posisi" (wajib → posisi) atau "Wajib semua" (posisi → wajib).
+- Penentuan cakupan otomatis berdasarkan `relevantPositions` drill: jika ["Semua"] → wajib; jika spesifik → posisi.
 
 **E. Alur eskalasi peringatan beban latihan (load management)**
 Saat sistem mendeteksi lonjakan beban seorang atlet, perlu alur yang jelas dari notifikasi → detail → tindakan (ubah status kesiapan atlet / modifikasi sesi berikutnya) tanpa terasa seperti "alarm error" yang menakutkan.

@@ -4,14 +4,16 @@ import { revalidatePath } from "next/cache";
 import { type InputJsonValue } from "@prisma/client/runtime/client";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { resolveOwnerIds } from "@/lib/program-access";
 
 function isOwner(role: string) {
   return role === "COACH" || role === "ASSISTANT";
 }
 
-function getProgram(programId: string, userId: string) {
+async function getProgram(programId: string, user: { id: string; role: string }) {
+  const ownerIds = await resolveOwnerIds(user);
   return prisma.program.findFirst({
-    where: { id: programId, ownerId: userId },
+    where: { id: programId, ownerId: { in: ownerIds } },
     select: { id: true, type: true },
   });
 }
@@ -49,13 +51,14 @@ export async function createProgram(input: {
   }
 
   let teamId: string | null = null;
+  let ownerId = user.id;
   if (input.type === "team") {
     const team = await prisma.team.findFirst({
       where:
         user.role === "ASSISTANT"
           ? { members: { some: { athleteId: user.id, roleInTeam: "assistant_coach" } } }
           : { coachId: user.id },
-      select: { id: true },
+      select: { id: true, coachId: true },
     });
     if (!team) {
       return {
@@ -64,13 +67,15 @@ export async function createProgram(input: {
       };
     }
     teamId = team.id;
+    // Program tim dimiliki oleh pelatih utama (coach), bukan asisten
+    ownerId = team.coachId;
   }
 
   const program = await prisma.program.create({
     data: {
       name,
       type: input.type,
-      ownerId: user.id,
+      ownerId,
       teamId,
       description: input.description?.trim() || null,
       startDate: start,
@@ -124,7 +129,7 @@ export async function createPlay(
   const user = await requireUser();
   if (!isOwner(user.role)) return { ok: false, error: "Akses ditolak." };
 
-  const program = await getProgram(programId, user.id);
+  const program = await getProgram(programId, user);
   if (!program) return { ok: false, error: "Program tidak ditemukan." };
 
   const play = await prisma.play.create({
@@ -202,7 +207,7 @@ export async function clonePlay(
   const user = await requireUser();
   if (!isOwner(user.role)) return { ok: false, error: "Akses ditolak." };
 
-  const program = await getProgram(programId, user.id);
+  const program = await getProgram(programId, user);
   if (!program) return { ok: false, error: "Program tidak ditemukan." };
 
   const template = await prisma.play.findUnique({ where: { id: templateId } });
@@ -252,7 +257,7 @@ export async function addDrillToSession(
   const user = await requireUser();
   if (!isOwner(user.role)) return { ok: false, error: "Akses ditolak." };
 
-  const program = await getProgram(programId, user.id);
+  const program = await getProgram(programId, user);
   if (!program) return { ok: false, error: "Program tidak ditemukan." };
 
   const session = await prisma.session.findFirst({
@@ -303,7 +308,7 @@ export async function removeDrillFromSession(
   const user = await requireUser();
   if (!isOwner(user.role)) return { ok: false, error: "Akses ditolak." };
 
-  const program = await getProgram(programId, user.id);
+  const program = await getProgram(programId, user);
   if (!program) return { ok: false, error: "Program tidak ditemukan." };
 
   const session = await prisma.session.findFirst({
@@ -326,7 +331,7 @@ export async function setDrillScope(
   const user = await requireUser();
   if (!isOwner(user.role)) return { ok: false, error: "Akses ditolak." };
 
-  const program = await getProgram(programId, user.id);
+  const program = await getProgram(programId, user);
   if (!program) return { ok: false, error: "Program tidak ditemukan." };
 
   const sd = await prisma.sessionDrill.findFirst({
@@ -368,7 +373,7 @@ export async function reorderSessionDrills(
   const user = await requireUser();
   if (!isOwner(user.role)) return { ok: false, error: "Akses ditolak." };
 
-  const program = await getProgram(programId, user.id);
+  const program = await getProgram(programId, user);
   if (!program) return { ok: false, error: "Program tidak ditemukan." };
 
   const session = await prisma.session.findFirst({
