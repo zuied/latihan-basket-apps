@@ -38,6 +38,11 @@
   --color-neutral-soft: #f3f4f6;
   --color-neutral-strong: #4b5563;
 
+  --color-accent: #f97316;
+  --color-accent-strong: #ea580c;
+  --color-accent-soft: #ffedd5;
+  --color-accent-faint: #fff7ed;
+
   --text-h1: 28px;
   --text-h1--line-height: 1.25;
   --text-h2: 24px;
@@ -60,4 +65,56 @@ body {
   background: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-dm-sans), system-ui, sans-serif;
+  scroll-behavior: smooth;
+}
+
+/* Card hover effect */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px -5px rgb(0 0 0 / 0.08), 0 4px 10px -6px rgb(0 0 0 / 0.04);
+}
+.card-hover:active {
+  transform: translateY(0);
+}
+
+/* Shimmer animation for skeleton loading */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--color-neutral-soft) 25%, var(--color-line) 50%, var(--color-neutral-soft) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* Print-friendly styles for rapor PDF export */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 12pt;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+  .print\:bg-white {
+    background: white !important;
+  }
+  .print\:border-b {
+    border-bottom: 1px solid #ccc !important;
+  }
+  header {
+    break-after: avoid;
+  }
+  section {
+    break-inside: avoid;
+  }
+  .rounded-2xl {
+    border-radius: 8px !important;
+  }
 }

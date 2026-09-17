@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { resolveOwnerIds } from "@/lib/program-access";
 import { DrillEditModal } from "@/components/drill/drill-edit-modal";
 import { DrillDeleteModal } from "@/components/drill/drill-delete-modal";
 import {
@@ -35,12 +36,13 @@ export default async function CoachDrillDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const user = await requireUser();
-  if (user.role !== "COACH") notFound();
+  if (!["COACH", "ASSISTANT"].includes(user.role)) notFound();
 
   const { id } = await params;
+  const ownerIds = await resolveOwnerIds(user);
 
   const drill = await prisma.drill.findFirst({
-    where: { id, ownerId: user.id },
+    where: { id, ownerId: { in: ownerIds } },
     include: {
       sessionDrills: {
         select: {

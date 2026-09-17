@@ -52,6 +52,7 @@ model Profile {
   sharedReports         SharedReport[]
   programAssignments    ProgramAssignment[]
   personalSessions      Session[]           @relation("PersonalSessions")
+  notifications         Notification[]
   relatedAsParent       ParentAthleteLink[] @relation("ParentLink")
   relatedAsAthlete      ParentAthleteLink[] @relation("AthleteLink")
 
@@ -424,7 +425,8 @@ model Injury {
   severity             String // ringan / sedang / berat
   startDate            DateTime  @map("start_date")
   expectedRecoveryDate DateTime? @map("expected_recovery_date")
-  status               String    @default("active") // active / recovered
+  resolvedDate         DateTime? @map("resolved_date")
+  status               String    @default("active") // active / resolved
   notes                String?
   recordedBy           String    @map("recorded_by")
   createdAt            DateTime  @default(now()) @map("created_at")
@@ -495,6 +497,7 @@ model SharedReport {
   createdBy String   @map("created_by")
   title     String
   summary   String? // ringkasan progres / JSON ringkas utk pihak luar
+  structuredData Json? @map("structured_data") // category scores, notes, recommendations
   expiresAt DateTime @map("expires_at")
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -521,6 +524,27 @@ model ProfileSession {
 
   @@index([profileId])
   @@map("profile_sessions")
+}
+
+// ============================================================================
+// I. Notifikasi In-App
+// ============================================================================
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  type      String   // schedule_change / load_alert / comment / announcement / consent
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade, map: "fk_notification_user")
+
+  @@index([userId])
+  @@index([userId, readAt])
+  @@map("notifications")
 }
 
 // ============================================================================

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import type { RaporSummary } from "@/app/(app)/pelatih/rapor/actions";
+import type { RaporSummary, RaporStructuredData } from "@/app/(app)/pelatih/rapor/actions";
+import { PrintButton } from "./print-button";
 
 const badgeFor: Record<string, { label: string; cls: string }> = {
   present: { label: "Hadir", cls: "bg-success-soft text-success" },
@@ -30,19 +31,29 @@ export default async function SharedRaporPage({
   }
   if (!summary) notFound();
 
+  let structured: RaporStructuredData | null = null;
+  try {
+    structured = report.structuredData as unknown as RaporStructuredData | null;
+  } catch {
+    structured = null;
+  }
+
   return (
-    <div className="min-h-screen bg-canvas">
-      <header className="border-b border-line bg-panel">
+    <div className="min-h-screen bg-canvas print:bg-white">
+      <header className="border-b border-line bg-panel print:border-b print:border-gray-300">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-2">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-primary-soft">
+            <span className="flex size-8 items-center justify-center rounded-lg bg-primary-soft print:hidden">
               🏀
             </span>
             <span className="text-small font-bold">Rapor Latihan Basket</span>
           </div>
-          <span className="text-tiny text-ink-soft">
-            Dibagikan oleh {report.creator.fullName}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-tiny text-ink-soft print:hidden">
+              Dibagikan oleh {report.creator.fullName}
+            </span>
+            <PrintButton />
+          </div>
         </div>
       </header>
 
@@ -130,6 +141,75 @@ export default async function SharedRaporPage({
             </p>
           </div>
         )}
+
+        {structured ? (
+          <>
+            {structured.categories.length > 0 ? (
+              <div className="mt-6 rounded-2xl border border-line bg-panel p-5 shadow-sm">
+                <p className="mb-3 text-small font-bold">Penilaian per kategori</p>
+                <div className="space-y-3">
+                  {structured.categories.map((cat) => (
+                    <div key={cat.name}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-small font-medium">{cat.name}</span>
+                        <span className="text-small font-bold text-primary">{cat.score}/{cat.maxScore}</span>
+                      </div>
+                      <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-line">
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{ width: `${(cat.score / cat.maxScore) * 100}%` }}
+                        />
+                      </div>
+                      {cat.notes ? (
+                        <p className="mt-1 text-tiny text-ink-soft">{cat.notes}</p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {(structured.qualitativeNotes.strengths || structured.qualitativeNotes.improvements || structured.qualitativeNotes.attitudeNotes) ? (
+              <div className="mt-6 rounded-2xl border border-line bg-panel p-5 shadow-sm">
+                <p className="mb-3 text-small font-bold">Evaluasi kualitatif</p>
+                <div className="space-y-3">
+                  {structured.qualitativeNotes.strengths ? (
+                    <div>
+                      <p className="text-tiny font-bold text-success">Kekuatan</p>
+                      <p className="mt-0.5 text-small text-ink">{structured.qualitativeNotes.strengths}</p>
+                    </div>
+                  ) : null}
+                  {structured.qualitativeNotes.improvements ? (
+                    <div>
+                      <p className="text-tiny font-bold text-warning">Area perbaikan</p>
+                      <p className="mt-0.5 text-small text-ink">{structured.qualitativeNotes.improvements}</p>
+                    </div>
+                  ) : null}
+                  {structured.qualitativeNotes.attitudeNotes ? (
+                    <div>
+                      <p className="text-tiny font-bold text-purple">Sikap & perilaku</p>
+                      <p className="mt-0.5 text-small text-ink">{structured.qualitativeNotes.attitudeNotes}</p>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {(structured.recommendations || structured.nextCycleFocus) ? (
+              <div className="mt-6 rounded-2xl border border-line bg-panel p-5 shadow-sm">
+                <p className="mb-3 text-small font-bold">Rekomendasi & fokus berikutnya</p>
+                {structured.recommendations ? (
+                  <p className="text-small text-ink">{structured.recommendations}</p>
+                ) : null}
+                {structured.nextCycleFocus ? (
+                  <p className="mt-2 text-tiny text-ink-soft">
+                    <span className="font-semibold">Fokus siklus berikutnya:</span> {structured.nextCycleFocus}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </>
+        ) : null}
       </main>
     </div>
   );

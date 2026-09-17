@@ -1,13 +1,20 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { FieldError, Input, Label } from "@/components/ui/field";
+import { Modal } from "@/components/ui/modal";
 import {
   changePassword,
+  deleteAccount,
   updateProfile,
   type SettingsState,
 } from "@/app/(app)/pengaturan/actions";
+import {
+  requestDataDeletion,
+  exportMyData,
+} from "@/app/(app)/pengaturan/privacy-actions";
 
 const POSITIONS = [
   "Point Guard",
@@ -23,12 +30,14 @@ export function SettingsForm({
   position,
   heightCm,
   weightKg,
+  role,
 }: {
   fullName: string;
   phone: string | null;
   position: string | null;
   heightCm: number | null;
   weightKg: number | null;
+  role: string;
 }) {
   const [profileState, profileAction, isProfilePending] = useActionState<
     SettingsState,
@@ -43,6 +52,28 @@ export function SettingsForm({
   const newPwdRef = useRef<HTMLInputElement>(null);
   const retypeRef = useRef<HTMLInputElement>(null);
   const [retypeError, setRetypeError] = useState<string | null>(null);
+
+  // Delete account modal
+  const router = useRouter();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeletePending, setIsDeletePending] = useState(false);
+
+  const deleteReady = deleteConfirm === "HAPUS" && !isDeletePending;
+
+  const onSubmitDelete = async (formData: FormData) => {
+    setIsDeletePending(true);
+    setDeleteError(null);
+    const result = await deleteAccount(undefined, formData);
+    setIsDeletePending(false);
+    if (result?.ok) {
+      setDeleteOpen(false);
+      router.push("/login");
+    } else if (result?.error) {
+      setDeleteError(result.error);
+    }
+  };
 
   const onSubmitPwd = (e: React.FormEvent) => {
     if (newPwdRef.current?.value !== retypeRef.current?.value) {
@@ -186,6 +217,210 @@ export function SettingsForm({
           </form>
         )}
       </section>
+
+      {/* Privasi & Data */}
+      <section className="rounded-2xl border border-line bg-panel p-5 shadow-sm">
+        <h2 className="mb-1 text-h4 font-bold tracking-tight">Privasi & Data</h2>
+        <p className="mb-4 text-tiny text-ink-soft">
+          Kelola data pribadi Anda sesuai hak privasi yang berlaku.
+        </p>
+        <PrivacySection role={role} />
+      </section>
+
+      {/* Zona Bahaya */}
+      <section className="rounded-2xl border border-danger/30 bg-danger/5 p-5">
+        <h2 className="mb-1 text-h4 font-bold tracking-tight text-danger">
+          Zona Bahaya
+        </h2>
+        <p className="mb-4 text-tiny text-ink-soft">
+          Menghapus akun akan menonaktifkan akses Anda secara permanen. Data
+          profil tidak akan terlihat lagi.
+        </p>
+        <Button
+          type="button"
+          variant="danger"
+          onClick={() => {
+            setDeleteOpen(true);
+            setDeleteConfirm("");
+          }}
+        >
+          Hapus Akun
+        </Button>
+      </section>
+
+      {/* Modal konfirmasi hapus akun */}
+      <Modal
+        open={deleteOpen}
+        onClose={() => {
+          setDeleteOpen(false);
+          setDeleteConfirm("");
+        }}
+        title="Hapus Akun"
+        description="Tindakan ini tidak dapat dibatalkan."
+      >
+        <form action={onSubmitDelete} className="space-y-4">
+          <p className="text-small text-ink-soft">
+            Ketik <span className="font-bold text-danger">HAPUS</span> untuk
+            mengonfirmasi penghapusan akun Anda.
+          </p>
+          <div>
+            <Label htmlFor="del-confirm">Konfirmasi</Label>
+            <Input
+              id="del-confirm"
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+              placeholder="Ketik HAPUS"
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="del-password">Password saat ini</Label>
+            <Input
+              id="del-password"
+              name="password"
+              type="password"
+              required
+              autoComplete="current-password"
+            />
+          </div>
+          <FieldError>{deleteError ?? undefined}</FieldError>
+          <div className="flex items-center gap-2">
+            <Button
+              type="submit"
+              variant="danger"
+              disabled={!deleteReady}
+            >
+              {isDeletePending ? "Menghapus…" : "Hapus Akun Saya"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setDeleteOpen(false);
+                setDeleteConfirm("");
+              }}
+            >
+              Batal
+            </Button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+}
+
+function PrivacySection({ role }: { role: string }) {
+  const [isPending, startTransition] = useTransition();
+  const [exported, setExported] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeletePending, startDeleteTransition] = useTransition();
+  const router = useRouter();
+
+  const deleteReady = deleteConfirm === "HAPUS";
+
+  const handleExport = () => {
+    startTransition(async () => {
+      const res = await exportMyData();
+      if (res.ok && res.data) {
+        const blob = new Blob([res.data], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `data-saya-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setExported(true);
+      }
+    });
+  };
+
+  const handleDeleteRequest = () => {
+    setDeleteError(null);
+    startDeleteTransition(async () => {
+      const res = await requestDataDeletion();
+      if (res.ok) {
+        router.push("/login");
+      } else if (res.error) {
+        setDeleteError(res.error);
+      }
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-line px-4 py-3">
+        <div>
+          <p className="text-small font-medium">Unduh data saya</p>
+          <p className="text-tiny text-ink-soft">
+            Unduh salinan semua data pribadi Anda dalam format JSON.
+          </p>
+        </div>
+        <Button
+          variant="soft"
+          size="sm"
+          disabled={isPending}
+          onClick={handleExport}
+        >
+          {isPending ? "Mengunduh..." : exported ? "✓ Tersimpan" : "Unduh"}
+        </Button>
+      </div>
+
+      {role === "PARENT" || role === "ATHLETE" ? (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-danger/30 px-4 py-3">
+          <div>
+            <p className="text-small font-medium text-danger">Minta penghapusan data</p>
+            <p className="text-tiny text-ink-soft">
+              Hapus akun Anda dan semua data terkait secara permanen. Tindakan ini tidak dapat dibatalkan.
+            </p>
+          </div>
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() => setDeleteOpen(true)}
+          >
+            Minta hapus
+          </Button>
+        </div>
+      ) : null}
+
+      <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)}>
+        <p className="mb-4 text-h4 font-bold">Minta Penghapusan Data</p>
+        <p className="mb-4 text-small text-ink-soft">
+          Semua data Anda akan dihapus secara permanen. Anda akan logout otomatis.
+        </p>
+        <div>
+          <Label htmlFor="privacy-confirm">Ketik HAPUS untuk konfirmasi</Label>
+          <Input
+            id="privacy-confirm"
+            value={deleteConfirm}
+            onChange={(e) => setDeleteConfirm(e.target.value)}
+            placeholder="HAPUS"
+          />
+        </div>
+        {deleteError ? (
+          <p className="mt-2 text-tiny text-danger">{deleteError}</p>
+        ) : null}
+        <div className="mt-4 flex items-center gap-2">
+          <Button
+            variant="danger"
+            disabled={!deleteReady || isDeletePending}
+            onClick={handleDeleteRequest}
+          >
+            {isDeletePending ? "Menghapus..." : "Ya, hapus data saya"}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setDeleteOpen(false);
+              setDeleteConfirm("");
+            }}
+          >
+            Batal
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

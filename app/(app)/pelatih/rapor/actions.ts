@@ -25,11 +25,28 @@ export type RaporSummary = {
   generatedAt: string;
 };
 
+export type RaporStructuredData = {
+  categories: {
+    name: string;
+    score: number;
+    maxScore: number;
+    notes: string;
+  }[];
+  qualitativeNotes: {
+    strengths: string;
+    improvements: string;
+    attitudeNotes: string;
+  };
+  recommendations: string;
+  nextCycleFocus: string;
+};
+
 export async function createSharedReport(
   athleteId: string,
+  structured?: RaporStructuredData,
 ): Promise<{ ok: boolean; slug?: string; url?: string; error?: string }> {
   const user = await requireUser();
-  if (user.role !== "COACH") {
+  if (!["COACH", "ASSISTANT"].includes(user.role)) {
     return { ok: false, error: "Hanya pelatih yang dapat membuat tautan rapor." };
   }
 
@@ -127,6 +144,7 @@ export async function createSharedReport(
       createdBy: user.id,
       title: `Rapor ${membership.athlete.fullName}`,
       summary: JSON.stringify(summary),
+      structuredData: structured ? JSON.parse(JSON.stringify(structured)) : null,
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     },
   });

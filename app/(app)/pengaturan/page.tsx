@@ -10,7 +10,6 @@ import {
 
 export default async function PengaturanPage() {
   const user = await requireUser();
-  if (user.role === "PARENT") notFound();
 
   const profile = await prisma.profile.findUnique({
     where: { id: user.id },
@@ -99,6 +98,7 @@ export default async function PengaturanPage() {
           position={profile.position}
           heightCm={profile.heightCm}
           weightKg={profile.weightKg}
+          role={user.role}
         />
         {user.role === "COACH" ? (
           <AccessManager

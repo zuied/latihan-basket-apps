@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { hash } from "bcryptjs";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -244,4 +245,78 @@ export async function setAssistantCoach(
   });
   revalidatePath(`/pelatih/tim/${teamId}`);
   return { ok: true };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Buat atlet baru + langsung masuk tim
+// ─────────────────────────────────────────────────────────────
+
+const createAthleteSchema = z.object({
+  fullName: z.string().trim().min(2, "Nama minimal 2 karakter"),
+  email: z.string().trim().email("Email tidak valid"),
+  position: z.string().trim().optional(),
+  jerseyNumber: z.string().trim().max(4).optional(),
+});
+
+export type CreateAthleteState =
+  | { ok?: boolean; error?: string; password?: string }
+  | undefined;
+
+export async function createAthlete(
+  teamId: string,
+  _prevState: CreateAthleteState,
+  formData: FormData,
+): Promise<CreateAthleteState> {
+  const found = await getCoachTeam(teamId);
+  if (!found) return { error: "Tim tidak ditemukan." };
+
+  const parsed = createAthleteSchema.safeParse({
+    fullName: formData.get("fullName"),
+    email: formData.get("email"),
+    position: formData.get("position"),
+    jerseyNumber: formData.get("jerseyNumber"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message };
+  }
+
+  // Check email uniqueness
+  const em = parsed.data.email.toLowerCase();
+  const existing = await prisma.profile.findUnique({
+    where: { email: em },
+    select: { id: true },
+  });
+  if (existing) {
+    return { error: "Email sudah terdaftar. Gunakan email lain atau tambahkan atlet dari daftar." };
+  }
+
+  // Generate default password
+  const defaultPassword = "basket123";
+  const passwordHash = await hash(defaultPassword, 10);
+
+  // Create profile
+  const profile = await prisma.profile.create({
+    data: {
+      fullName: parsed.data.fullName,
+      email: em,
+      role: "ATHLETE",
+      passwordHash,
+      position: parsed.data.position || null,
+    },
+    select: { id: true },
+  });
+
+  // Add to team
+  await prisma.teamMember.create({
+    data: {
+      teamId,
+      athleteId: profile.id,
+      roleInTeam: "player",
+      jerseyNumber: parsed.data.jerseyNumber || null,
+      status: "active",
+    },
+  });
+
+  revalidatePath(`/pelatih/tim/${teamId}`);
+  return { ok: true, password: defaultPassword };
 }

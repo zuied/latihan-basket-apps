@@ -36,7 +36,6 @@ export default async function CoachAthleteProfilePage({
         take: 1,
       },
       injuriesSuffered: {
-        where: { status: "active" },
         orderBy: { startDate: "desc" },
       },
       assessmentResults: {
@@ -53,7 +52,16 @@ export default async function CoachAthleteProfilePage({
       },
       sessionLogs: {
         where: { loggedAt: { gte: new Date(now.getTime() - 28 * 86400000) } },
-        include: { session: { select: { durationMinutes: true } } },
+        include: {
+          session: { select: { name: true, durationMinutes: true } },
+          drillResults: {
+            include: {
+              sessionDrill: {
+                include: { drill: { select: { name: true, subCategory: true } } },
+              },
+            },
+          },
+        },
         orderBy: { loggedAt: "asc" },
       },
     },
@@ -115,6 +123,7 @@ export default async function CoachAthleteProfilePage({
       : null;
 
   const data: AthleteProfileData = {
+    athleteId: athlete.id,
     fullName: athlete.fullName,
     position: athlete.position,
     heightCm: athlete.heightCm,
@@ -129,7 +138,9 @@ export default async function CoachAthleteProfilePage({
       injuryType: i.injuryType,
       severity: i.severity,
       startDate: i.startDate.toISOString(),
+      resolvedDate: i.resolvedDate?.toISOString() ?? null,
       notes: i.notes,
+      status: i.status,
     })),
     programs: assignments
       .map((a) => ({
@@ -141,6 +152,55 @@ export default async function CoachAthleteProfilePage({
       .filter((p) => p.status === "active"),
     baseline: baselineOverview,
     loadByWeek: weeks,
+    sessionHistory: athlete.sessionLogs.map((l) => ({
+      id: l.id,
+      sessionName: l.session.name,
+      date: l.loggedAt.toISOString(),
+      attendanceStatus: l.attendanceStatus,
+      rpe: l.rpe,
+      durationMinutes: l.durationActualMinutes ?? l.session.durationMinutes,
+      drillCount: l.drillResults.length,
+    })).reverse(),
+    performanceTrend: {
+      rpeByWeek: weeks.map((w, idx) => {
+        const weekStart = new Date(m0);
+        weekStart.setDate(m0.getDate() - 7 * (3 - idx));
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 7);
+        const weekLogs = athlete.sessionLogs.filter(
+          (l) => l.loggedAt >= weekStart && l.loggedAt < weekEnd && l.rpe,
+        );
+        const avgRpe =
+          weekLogs.length > 0
+            ? weekLogs.reduce((s, l) => s + (l.rpe ?? 0), 0) / weekLogs.length
+            : 0;
+        return { label: w.label, avgRpe: Math.round(avgRpe * 10) / 10 };
+      }),
+      attendanceByWeek: weeks.map((w, idx) => {
+        const weekStart = new Date(m0);
+        weekStart.setDate(m0.getDate() - 7 * (3 - idx));
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 7);
+        const weekLogs = athlete.sessionLogs.filter(
+          (l) => l.loggedAt >= weekStart && l.loggedAt < weekEnd,
+        );
+        const attended = weekLogs.filter(
+          (l) => l.attendanceStatus === "present" || l.attendanceStatus === "late",
+        ).length;
+        return { label: w.label, total: weekLogs.length, attended };
+      }),
+      completionRate: (() => {
+        const totalDrills = athlete.sessionLogs.reduce(
+          (s, l) => s + l.drillResults.length,
+          0,
+        );
+        const withResults = athlete.sessionLogs.reduce(
+          (s, l) => s + l.drillResults.filter((r) => r.actualValue > 0).length,
+          0,
+        );
+        return totalDrills > 0 ? Math.round((withResults / totalDrills) * 100) : null;
+      })(),
+    },
   };
 
   return <AthleteProfile data={data} />;

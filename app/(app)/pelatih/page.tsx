@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/ui/stat-card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { createNotification } from "@/app/(app)/notifications/actions";
 
 const WEEKDAY_DATE = new Intl.DateTimeFormat("id-ID", {
   weekday: "long",
@@ -129,20 +130,77 @@ export default async function CoachDashboard() {
     }
   }
 
+  // ── Load spike detection (acute:chronic RPE ratio) ──
+  const fourWeeksAgo = new Date(now.getTime() - 28 * 24 * 60 * 60 * 1000);
+  const rpeLogs = await prisma.sessionLog.findMany({
+    where: {
+      session: { teamId: team.id },
+      rpe: { not: null },
+      loggedAt: { gte: fourWeeksAgo },
+    },
+    select: {
+      athleteId: true,
+      rpe: true,
+      loggedAt: true,
+    },
+  });
+
+  const rpeByAthlete = new Map<string, { current: number[]; previous: number[] }>();
+  for (const log of rpeLogs) {
+    const aid = log.athleteId;
+    if (!rpeByAthlete.has(aid)) rpeByAthlete.set(aid, { current: [], previous: [] });
+    const bucket = rpeByAthlete.get(aid)!;
+    const diffWeeks = (now.getTime() - log.loggedAt.getTime()) / (7 * 24 * 60 * 60 * 1000);
+    if (diffWeeks <= 1) {
+      bucket.current.push(log.rpe!);
+    } else {
+      bucket.previous.push(log.rpe!);
+    }
+  }
+
+  for (const member of team.members) {
+    const rpeData = rpeByAthlete.get(member.athleteId);
+    if (!rpeData || rpeData.current.length === 0 || rpeData.previous.length === 0) continue;
+
+    const currentAvg = rpeData.current.reduce((a, b) => a + b, 0) / rpeData.current.length;
+    const prevAvg = rpeData.previous.reduce((a, b) => a + b, 0) / rpeData.previous.length;
+    const ratio = prevAvg > 0 ? currentAvg / prevAvg : 0;
+
+    if (ratio > 1.5) {
+      const detail = `Beban naik ${Math.round((ratio - 1) * 100)}% (RPE minggu ini: ${currentAvg.toFixed(1)}, rata-rata: ${prevAvg.toFixed(1)})`;
+      loadAlerts.push({
+        athleteName: member.athlete.fullName,
+        detail,
+        severity: ratio > 2 ? "danger" : "warning",
+      });
+
+      // Create notification (fire-and-forget)
+      createNotification(
+        user.id,
+        "load_alert",
+        `Peringatan beban: ${member.athlete.fullName}`,
+        detail,
+        `/pelatih/atlet/${member.athleteId}`,
+      ).catch(() => {});
+    }
+  }
+
   const firstName = user.fullName.split(" ")[0];
 
   return (
     <div className="mx-auto max-w-6xl">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-h1 font-semibold tracking-tight">
-            {greetingWord()}, Coach {firstName}
-          </h1>
-          <p className="mt-1 text-small text-ink-soft">
-            Ringkasan hal yang perlu diperhatikan hari ini.
-          </p>
+      <div className="mb-6 rounded-2xl bg-gradient-to-r from-primary-soft via-panel to-purple-soft p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-h1 font-semibold tracking-tight">
+              {greetingWord()}, Coach {firstName}
+            </h1>
+            <p className="mt-1 text-small text-ink-soft">
+              Ringkasan hal yang perlu diperhatikan hari ini.
+            </p>
+          </div>
+          <Badge>{WEEKDAY_DATE.format(now)}</Badge>
         </div>
-        <Badge>{WEEKDAY_DATE.format(now)}</Badge>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

@@ -4,8 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { SectionTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/cn";
+import { MetricComparison, type AthleteStat } from "@/components/statistik/metric-comparison";
 
 export default async function CoachTeamStatsPage() {
   const user = await requireUser();
@@ -67,27 +66,60 @@ export default async function CoachTeamStatsPage() {
     attByAthlete.set(l.athleteId, cur);
   }
 
-  // Drill results via sessionLog relation (free throw % as default metric)
+  // Drill results — fetch all with category info for metric selector
   const drillResults = await prisma.drillResult.findMany({
     where: { sessionLog: { session: { teamId: team.id } } },
     select: {
       actualValue: true,
       unit: true,
       sessionLog: { select: { athleteId: true } },
-      sessionDrill: { select: { drill: { select: { name: true } } } },
+      sessionDrill: {
+        select: {
+          drill: {
+            select: { name: true, mainCategory: true, subCategory: true },
+          },
+        },
+      },
     },
   });
 
-  const FT_TERMS = ["free throw", "free-throw", "free_throw", "freethrow"];
-  const ftByAthlete = new Map<string, { made: number; total: number }>();
+  // Metric keys matching MetricComparison component
+  const METRIC_DRILLS: Record<string, string[]> = {
+    "free-throw": ["free throw", "free-throw", "free_throw", "freethrow"],
+    scoring: ["shooting", "mikan", "form shooting"],
+    "ball-handling": [
+      "crossover",
+      "behind-back",
+      "dribble",
+      "ball handling",
+    ],
+    agility: ["defensive slide", "agility", "slide"],
+    speed: ["sprint", "speed", "kecepatan"],
+  };
+
+  // Accumulate per-athlete, per-metric sums
+  const metricAccum = new Map<
+    string,
+    Record<string, { sum: number; count: number }>
+  >();
   for (const d of drillResults) {
-    const n = (d.sessionDrill.drill.name ?? "").toLowerCase();
-    if (!FT_TERMS.some((t) => n.includes(t))) continue;
     const aid = d.sessionLog.athleteId;
-    const cur = ftByAthlete.get(aid) ?? { made: 0, total: 0 };
-    cur.made += Math.round(d.actualValue);
-    cur.total += 1;
-    ftByAthlete.set(aid, cur);
+    const drillName = (d.sessionDrill.drill.name ?? "").toLowerCase();
+    if (!metricAccum.has(aid)) metricAccum.set(aid, {});
+    const acc = metricAccum.get(aid)!;
+    for (const [key, terms] of Object.entries(METRIC_DRILLS)) {
+      if (terms.some((t) => drillName.includes(t))) {
+        const cur = acc[key] ?? { sum: 0, count: 0 };
+        cur.sum += d.actualValue;
+        cur.count += 1;
+        acc[key] = cur;
+      }
+    }
+    // Completion rate: all drills with actualValue
+    const cur = acc["completion"] ?? { sum: 0, count: 0 };
+    cur.sum += d.actualValue;
+    cur.count += 1;
+    acc["completion"] = cur;
   }
 
   type Row = {
@@ -100,28 +132,54 @@ export default async function CoachTeamStatsPage() {
     readiness: string | null;
   };
 
-  const rows: Row[] = members.map((m) => {
-    const ft = ftByAthlete.get(m.athleteId);
-    const att = attByAthlete.get(m.athleteId);
+  // Build athlete stat rows for MetricComparison
+  const athleteStats: AthleteStat[] = members.map((m) => {
+    const acc = metricAccum.get(m.athleteId) ?? {};
+    const values: Record<string, number | null> = {};
+    for (const key of [
+      "free-throw",
+      "scoring",
+      "ball-handling",
+      "agility",
+      "speed",
+      "completion",
+    ]) {
+      const a = acc[key];
+      values[key] = a && a.count > 0 ? Math.round((a.sum / a.count) * 10) / 10 : null;
+    }
     return {
       id: m.athleteId,
       name: m.athlete.fullName,
       jerseyNumber: m.jerseyNumber,
       position: m.athlete.position,
-      ftPct: ft && ft.total > 0 ? Math.round((ft.made / ft.total) * 100) : null,
-      attendance: att ? { rate: Math.round((att.present / att.total) * 100), n: att.total } : null,
-      readiness: m.athlete.readinessRecords[0]?.status ?? null,
+      values,
     };
   });
 
-  const sorted = [...rows].sort((a, b) => (b.ftPct ?? -1) - (a.ftPct ?? -1));
+  // Rows for "perlu perhatian" section
+  const rows: Row[] = members.map((m) => {
+    const att = attByAthlete.get(m.athleteId);
+    const ftAcc = metricAccum.get(m.athleteId)?.["free-throw"];
+    return {
+      id: m.athleteId,
+      name: m.athlete.fullName,
+      jerseyNumber: m.jerseyNumber,
+      position: m.athlete.position,
+      ftPct:
+        ftAcc && ftAcc.count > 0
+          ? Math.round((ftAcc.sum / ftAcc.count) * 10)
+          : null,
+      attendance: att
+        ? { rate: Math.round((att.present / att.total) * 100), n: att.total }
+        : null,
+      readiness: m.athlete.readinessRecords[0]?.status ?? null,
+    };
+  });
 
   const needsAttention = rows.filter((r) => {
     const lowAtt = r.attendance !== null && r.attendance.rate < 60;
     return lowAtt || (r.readiness !== null && r.readiness !== "full");
   });
-
-  const maxFt = Math.max(1, ...sorted.map((r) => r.ftPct ?? 0));
 
   const READINESS_LABEL: Record<string, string> = {
     full: "Siap penuh",
@@ -159,45 +217,10 @@ export default async function CoachTeamStatsPage() {
         />
       </div>
 
-      {/* Bar perbandingan Free Throw % */}
-      <section className="mb-8 rounded-2xl border border-line bg-panel p-5 shadow-sm">
-        <div className="mb-1 flex items-center justify-between">
-          <h2 className="text-h4 font-bold tracking-tight">Perbandingan Free Throw %</h2>
-          <Badge variant="neutral">metrik default</Badge>
-        </div>
-        <p className="mb-4 text-tiny text-ink-soft">
-          Bar horizontal memudahkan membaca banyak nama pemain sekaligus.
-        </p>
-
-        {sorted.length === 0 ? (
-          <p className="py-4 text-center text-tiny text-ink-soft">Belum ada data pemain.</p>
-        ) : (
-          <ul className="space-y-3">
-            {sorted.map((r) => (
-              <li key={r.id} className="flex items-center gap-3">
-                <Link
-                  href={`/pelatih/atlet/${r.id}`}
-                  className="w-28 shrink-0 truncate text-small font-semibold hover:text-primary sm:w-40"
-                >
-                  {r.jerseyNumber ? `#${r.jerseyNumber} ` : ""}{r.name}
-                </Link>
-                <div className="relative h-5 flex-1 overflow-hidden rounded-full bg-canvas">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all",
-                      (r.ftPct ?? 0) >= 70 ? "bg-primary" : (r.ftPct ?? 0) >= 50 ? "bg-warning" : "bg-danger",
-                    )}
-                    style={{ width: `${r.ftPct !== null ? Math.max(4, (r.ftPct / maxFt) * 100) : 4}%` }}
-                  />
-                </div>
-                <span className="w-14 shrink-0 text-right text-small font-bold tabular-nums">
-                  {r.ftPct !== null ? `${r.ftPct}%` : "—"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {/* Metrik drill interaktif */}
+      <div className="mb-8">
+        <MetricComparison athletes={athleteStats} />
+      </div>
 
       {/* Daftar pemain perlu perhatian */}
       <section className="rounded-2xl border border-line bg-panel p-5 shadow-sm">
@@ -224,8 +247,7 @@ export default async function CoachTeamStatsPage() {
                       {r.jerseyNumber ? `#${r.jerseyNumber} ` : ""}{r.name}
                     </p>
                     <p className="mt-0.5 text-tiny text-ink-soft">
-                      Kehadiran {r.attendance ? `${r.attendance.rate}%` : "—"} · FT{" "}
-                      {r.ftPct !== null ? `${r.ftPct}%` : "—"}
+                      Kehadiran {r.attendance ? `${r.attendance.rate}%` : "—"}
                       {r.readiness && r.readiness !== "full"
                         ? ` · Kesiapan: ${READINESS_LABEL[r.readiness] ?? r.readiness}`
                         : ""}

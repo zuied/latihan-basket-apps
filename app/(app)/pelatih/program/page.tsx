@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { resolveOwnerIds } from "@/lib/program-access";
 import { ProgramBuilder, type BuilderProgram, type BankDrill, type BuilderPlay } from "@/components/program/program-builder";
 import type { TemplatePlay } from "@/components/playbook/play-template-library";
+import type { ProgramTemplate } from "@/components/program/program-builder";
 
 const targetText = (targetValue: number | null, targetUnit: string | null) => {
   if (targetValue === null) return "";
@@ -54,6 +55,8 @@ function mapSessionDrill(sd: {
     drillName: sd.drill.name,
     subCategory: sd.drill.subCategory,
     targetText: targetText(sd.targetValue, sd.targetUnit),
+    targetValue: sd.targetValue,
+    targetUnit: sd.targetUnit,
     isMandatory: positions.includes("Semua"),
     assignedPositions: positions,
   };
@@ -85,8 +88,6 @@ function mapProgram(raw: NonNullable<Awaited<ReturnType<typeof findPrograms>>[nu
     })),
   );
 
-  // Sesi yang tidak terikat minggu (mis. program personal) tetap ditampilkan
-  // sebagai grup tersendiri agar tidak hilang dari builder.
   const looseGroup =
     raw.sessions.length > 0
       ? [
@@ -104,6 +105,7 @@ function mapProgram(raw: NonNullable<Awaited<ReturnType<typeof findPrograms>>[nu
     name: raw.name,
     type: raw.type,
     description: raw.description,
+    isTemplate: raw.isTemplate,
     phaseName: raw.phases[0]?.name ?? null,
     phases: raw.phases.map((phase) => ({
       id: phase.id,
@@ -174,7 +176,7 @@ export default async function CoachProgramsPage() {
 
   const ownerIds = await resolveOwnerIds(user);
 
-  const [rawPrograms, bank, templates] = await Promise.all([
+  const [rawPrograms, bank, templates, programTemplates] = await Promise.all([
     findPrograms(ownerIds),
     prisma.drill.findMany({
       where: { ownerId: { in: ownerIds } },
@@ -191,6 +193,11 @@ export default async function CoachProgramsPage() {
       where: { isTemplate: true, programId: null },
       orderBy: { name: "asc" },
       select: { id: true, name: true, description: true, elements: true },
+    }),
+    prisma.program.findMany({
+      where: { ownerId: { in: ownerIds }, isTemplate: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, description: true, type: true },
     }),
   ]);
 
@@ -214,12 +221,20 @@ export default async function CoachProgramsPage() {
       : [],
   }));
 
+  const progTemplates: ProgramTemplate[] = programTemplates.map((t) => ({
+    id: t.id,
+    name: t.name,
+    description: t.description,
+    type: t.type,
+  }));
+
   return (
     <ProgramBuilder
       teamPrograms={teamPrograms}
       personalPrograms={personalPrograms}
       bank={bankDrills}
       templates={templatePlays}
+      programTemplates={progTemplates}
     />
   );
 }

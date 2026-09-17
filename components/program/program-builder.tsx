@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { CreateProgramModal } from "@/components/program/create-program-modal";
 import { PlaybookEditor, type PlayData } from "@/components/playbook/court-editor";
 import { PlayTemplateLibrary, type TemplatePlay } from "@/components/playbook/play-template-library";
-import { createPlay, addDrillToSession, removeDrillFromSession, setDrillScope, reorderSessionDrills } from "@/app/(app)/pelatih/program/actions";
+import { createPlay, addDrillToSession, removeDrillFromSession, setDrillScope, reorderSessionDrills, saveAsTemplate, cloneProgram, setDrillTarget } from "@/app/(app)/pelatih/program/actions";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -34,6 +34,8 @@ export type BuilderDrill = {
   drillName: string;
   subCategory: string;
   targetText: string;
+  targetValue: number | null;
+  targetUnit: string | null;
   isMandatory: boolean;
   assignedPositions: string[];
 };
@@ -59,6 +61,7 @@ export type BuilderProgram = {
   name: string;
   type: string;
   description: string | null;
+  isTemplate: boolean;
   phaseName: string | null;
   phases: BuilderPhase[];
   cycles: BuilderCycle[];
@@ -71,6 +74,13 @@ export type BankDrill = {
   subCategory: string;
   difficulty: string;
   positions: string[];
+};
+
+export type ProgramTemplate = {
+  id: string;
+  name: string;
+  description: string | null;
+  type: string;
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -221,6 +231,21 @@ function StructureTab({
         .catch(() => {
           setScopeBusy(null);
         });
+    },
+    [program.id, router],
+  );
+
+  const onSetTarget = useCallback(
+    (drill: BuilderDrill, value: string) => {
+      const num = value.trim() === "" ? null : parseFloat(value);
+      if (num !== null && Number.isNaN(num)) return;
+      const unit = drill.targetUnit ?? "reps";
+      setDrillTarget(drill.id, program.id, num, unit)
+        .then((res) => {
+          if (!res.ok) console.error(res.error ?? "Gagal mengubah target");
+          router.refresh();
+        })
+        .catch(() => {});
     },
     [program.id, router],
   );
@@ -442,7 +467,19 @@ function StructureTab({
                                       <span className="ml-2 text-ink-faint">{drill.subCategory}</span>
                                     </span>
                                     <span className="flex shrink-0 items-center gap-2">
-                                      <span className="text-ink-soft">{drill.targetText}</span>
+                                      <input
+                                        type="text"
+                                        defaultValue={drill.targetValue ?? ""}
+                                        placeholder="target"
+                                        onBlur={(e) => onSetTarget(drill, e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") {
+                                            e.currentTarget.blur();
+                                          }
+                                        }}
+                                        className="w-16 rounded border border-line bg-panel px-1.5 py-0.5 text-right text-[11px] tabular-nums text-ink-soft focus:border-primary focus:outline-none"
+                                        title="Klik untuk mengubah target"
+                                      />
                                       <button
                                         type="button"
                                         onClick={() => onToggleScope(drill, "positional")}
@@ -506,7 +543,19 @@ function StructureTab({
                                         </span>
                                       </span>
                                       <span className="flex shrink-0 items-center gap-2">
-                                        <span className="text-ink-soft">{drill.targetText}</span>
+                                        <input
+                                          type="text"
+                                          defaultValue={drill.targetValue ?? ""}
+                                          placeholder="target"
+                                          onBlur={(e) => onSetTarget(drill, e.target.value)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                              e.currentTarget.blur();
+                                            }
+                                          }}
+                                          className="w-16 rounded border border-line bg-panel px-1.5 py-0.5 text-right text-[11px] tabular-nums text-ink-soft focus:border-primary focus:outline-none"
+                                          title="Klik untuk mengubah target"
+                                        />
                                         <button
                                           type="button"
                                           onClick={() => onToggleScope(drill, "mandatory")}
@@ -814,16 +863,22 @@ export function ProgramBuilder({
   personalPrograms,
   bank,
   templates,
+  programTemplates,
 }: {
   teamPrograms: BuilderProgram[];
   personalPrograms: BuilderProgram[];
   bank: BankDrill[];
   templates: TemplatePlay[];
+  programTemplates: ProgramTemplate[];
 }) {
   const [mode, setMode] = useState<"team" | "personal">(
     teamPrograms.length > 0 ? "team" : "personal",
   );
   const [createOpen, setCreateOpen] = useState(false);
+  const [templateBusy, setTemplateBusy] = useState(false);
+  const [cloneName, setCloneName] = useState("");
+  const [cloneTargetId, setCloneTargetId] = useState<string | null>(null);
+  const router = useRouter();
 
   const activePrograms = mode === "team" ? teamPrograms : personalPrograms;
   const [selectedProgramId, setSelectedProgramId] = useState<string | null>(
@@ -853,6 +908,25 @@ export function ProgramBuilder({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button onClick={() => setCreateOpen(true)}>+ Buat program</Button>
+          {selected && !selected.isTemplate ? (
+            <Button
+              variant="secondary"
+              disabled={templateBusy}
+              onClick={async () => {
+                setTemplateBusy(true);
+                await saveAsTemplate(selected.id);
+                setTemplateBusy(false);
+                router.refresh();
+              }}
+            >
+              {templateBusy ? "Menyimpan…" : "📐 Simpan sebagai Template"}
+            </Button>
+          ) : null}
+          {selected?.isTemplate ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-soft px-3 py-1 text-tiny font-semibold text-primary">
+              📐 Template
+            </span>
+          ) : null}
           <Link
             href="/pelatih/kalender"
             className="inline-flex items-center gap-2 rounded-lg border border-line bg-panel px-4 py-2 text-small font-medium text-ink transition-colors hover:bg-neutral-soft"
@@ -905,6 +979,65 @@ export function ProgramBuilder({
             </button>
           ))}
         </div>
+      ) : null}
+
+      {/* ── Template browser ── */}
+      {programTemplates.length > 0 ? (
+        <section className="mb-6 rounded-2xl border border-line bg-panel p-4 shadow-sm">
+          <h3 className="mb-2 text-small font-bold tracking-tight">📐 Template Program</h3>
+          <p className="mb-3 text-tiny text-ink-soft">
+            Gunakan template untuk membuat program baru dengan struktur yang sudah ada.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {programTemplates.map((t) => (
+              <div key={t.id} className="flex items-center gap-2 rounded-xl border border-line bg-canvas px-3 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-small font-semibold">{t.name}</p>
+                  <p className="text-tiny text-ink-soft">{t.type === "team" ? "Tim" : "Personal"}</p>
+                </div>
+                {cloneTargetId === t.id ? (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={cloneName}
+                      onChange={(e) => setCloneName(e.target.value)}
+                      placeholder="Nama program baru"
+                      className="w-36 rounded-lg border border-line bg-panel px-2 py-1 text-tiny focus:border-primary focus:outline-none"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        const result = await cloneProgram(t.id, cloneName || `Salinan: ${t.name}`);
+                        if (result.ok && result.id) {
+                          setCloneTargetId(null);
+                          setCloneName("");
+                          setSelectedProgramId(result.id);
+                          router.refresh();
+                        }
+                      }}
+                    >
+                      Buat
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setCloneTargetId(null)}>
+                      ✕
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="soft"
+                    onClick={() => {
+                      setCloneTargetId(t.id);
+                      setCloneName(`Salinan: ${t.name}`);
+                    }}
+                  >
+                    Gunakan
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
       ) : null}
 
       {selected ? (

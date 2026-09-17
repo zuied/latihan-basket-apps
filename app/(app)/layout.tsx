@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { logoutAction } from "@/app/login/actions";
 import { AthleteBottomNav } from "@/components/nav/athlete-bottom-nav";
+import { SidebarNav } from "@/components/nav/sidebar-nav";
+import { NotificationBell } from "@/app/(app)/notifications/notification-bell";
 import { cn } from "@/lib/cn";
 
 const NAV: Record<string, { label: string; href: string }[]> = {
@@ -29,6 +31,7 @@ const NAV: Record<string, { label: string; href: string }[]> = {
     { label: "Kalender", href: "/pelatih/kalender" },
     { label: "Kehadiran", href: "/pelatih/kehadiran" },
     { label: "Statistik", href: "/pelatih/statistik" },
+    { label: "Drill", href: "/pelatih/drill" },
     { label: "Asesmen", href: "/pelatih/asesmen" },
     { label: "Pengumuman", href: "/pengumuman" },
     { label: "Pengaturan", href: "/pengaturan" },
@@ -41,7 +44,9 @@ const NAV: Record<string, { label: string; href: string }[]> = {
   ],
   PARENT: [
     { label: "Beranda", href: "/orangtua" },
+    { label: "Persetujuan", href: "/orangtua/consent" },
     { label: "Rapor", href: "/orangtua/rapor" },
+    { label: "Pengaturan", href: "/pengaturan" },
   ],
 };
 
@@ -71,26 +76,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </span>
           <span className="text-base font-bold tracking-tight">Latihan Basket</span>
         </Link>
-        <nav className="flex-1 space-y-1 px-3 py-2">
-          {NAV[user.role]?.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="block rounded-lg px-3 py-2 text-small font-medium text-ink-soft transition-colors hover:bg-neutral-soft hover:text-ink"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <SidebarNav items={NAV[user.role] ?? []} role={user.role} />
         <div className="border-t border-line px-5 py-4">
-          <div className="flex items-center gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-small font-semibold text-white">
-              {initial}
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-small font-semibold">{user.fullName}</p>
-              <p className="text-tiny text-ink-soft">{ROLE_LABEL[user.role]}</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-small font-semibold text-white">
+                {initial}
+              </span>
+              <div className="min-w-0">
+                <p className="truncate text-small font-semibold">{user.fullName}</p>
+                <p className="text-tiny text-ink-soft">{ROLE_LABEL[user.role]}</p>
+              </div>
             </div>
+            <NotificationBell />
           </div>
           <form action={logoutAction} className="mt-3">
             <button
@@ -109,16 +107,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <span className="flex size-8 items-center justify-center rounded-lg bg-primary-soft">🏀</span>
             <span className="text-small font-bold">Latihan Basket</span>
           </Link>
-          <form action={logoutAction}>
-            <button
-              type="submit"
-              className={cn(
-                "rounded-lg border border-line px-3 py-1.5 text-tiny font-medium text-ink-soft",
-              )}
-            >
-              Keluar
-            </button>
-          </form>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <form action={logoutAction}>
+              <button
+                type="submit"
+                className={cn(
+                  "rounded-lg border border-line px-3 py-1.5 text-tiny font-medium text-ink-soft",
+                )}
+              >
+                Keluar
+              </button>
+            </form>
+          </div>
         </header>
 
         <main className="flex-1 px-4 py-6 pb-20 sm:px-6 lg:px-8 lg:pb-6">{children}</main>

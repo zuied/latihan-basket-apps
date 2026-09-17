@@ -100,7 +100,7 @@ export default async function CoachAthletesPage() {
                 <Link
                   key={member.id}
                   href={`/pelatih/atlet/${member.athlete.id}`}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-panel p-4 shadow-sm transition-colors hover:bg-neutral-soft"
+                  className="card-hover flex items-center justify-between gap-3 rounded-2xl border border-line bg-panel p-4 shadow-sm transition-colors hover:bg-neutral-soft"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-small font-semibold text-primary">

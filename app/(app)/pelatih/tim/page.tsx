@@ -71,7 +71,7 @@ export default async function CoachTeamsPage() {
               <Link
                 key={team.id}
                 href={`/pelatih/tim/${team.id}`}
-                className="rounded-2xl border border-line bg-panel p-5 shadow-sm transition-colors hover:border-primary hover:bg-primary-soft/20"
+                className="card-hover rounded-2xl border border-line bg-panel p-5 shadow-sm transition-colors hover:border-primary hover:bg-primary-soft/20"
               >
                 <div className="mb-3 flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -83,13 +83,9 @@ export default async function CoachTeamsPage() {
                       </p>
                     ) : null}
                   </div>
-                  <Link
-                    href={`/pelatih/tim/${team.id}`}
-                    aria-label={`Kelola ${team.name}`}
-                    className="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-soft transition-colors hover:bg-neutral-soft hover:text-ink"
-                  >
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg text-ink-soft">
                     <DashDash className="size-4" />
-                  </Link>
+                  </span>
                 </div>
 
                 {team.description ? (

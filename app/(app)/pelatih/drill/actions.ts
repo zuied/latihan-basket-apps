@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
+import { resolveOwnerIds } from "@/lib/program-access";
 import type { DrillState } from "@/lib/drill";
 
 function parseFormData(formData: FormData) {
@@ -82,7 +83,11 @@ export async function updateDrill(
   const user = await requireUser();
 
   const existing = await prisma.drill.findUnique({ where: { id: drillId } });
-  if (!existing || existing.ownerId !== user.id) {
+  if (!existing) {
+    return { error: "Drill tidak ditemukan." };
+  }
+  const ownerIds = await resolveOwnerIds(user);
+  if (!ownerIds.includes(existing.ownerId)) {
     return { error: "Drill tidak ditemukan atau bukan milik Anda." };
   }
 
@@ -102,7 +107,9 @@ export async function deleteDrill(drillId: string): Promise<boolean> {
   const user = await requireUser();
 
   const existing = await prisma.drill.findUnique({ where: { id: drillId } });
-  if (!existing || existing.ownerId !== user.id) return false;
+  if (!existing) return false;
+  const ownerIds = await resolveOwnerIds(user);
+  if (!ownerIds.includes(existing.ownerId)) return false;
 
   await prisma.drill.delete({ where: { id: drillId } });
   revalidatePath("/pelatih/drill");

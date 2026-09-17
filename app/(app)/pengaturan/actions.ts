@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { compare, hash } from "bcryptjs";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { requireUser, destroySession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export type SettingsState = { ok?: boolean; error?: string } | undefined;
@@ -204,5 +204,123 @@ export async function setParentAccess(
   });
 
   revalidatePath("/pengaturan");
+  return { ok: true };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Tambah link orang tua (coach → parent)
+// ─────────────────────────────────────────────────────────────
+
+export async function addParentLink(
+  athleteEmail: string,
+  parentEmail: string,
+  relationship: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  if (!isAccessManager(user.role)) return { ok: false, error: "Akses ditolak." };
+
+  const ae = athleteEmail.trim().toLowerCase();
+  const pe = parentEmail.trim().toLowerCase();
+  if (!ae || !pe) return { ok: false, error: "Email atlet dan orang tua wajib diisi." };
+  if (!relationship.trim()) return { ok: false, error: "Hubungan wajib diisi." };
+
+  // Find athlete
+  const athlete = await prisma.profile.findUnique({
+    where: { email: ae },
+    select: { id: true, role: true },
+  });
+  if (!athlete) return { ok: false, error: `Tidak ada akun atlet dengan email ${ae}.` };
+  if (athlete.role !== "ATHLETE") {
+    return { ok: false, error: `Email ${ae} bukan akun atlet.` };
+  }
+
+  // Verify athlete is on coach's team
+  const member = await prisma.teamMember.findFirst({
+    where: { athleteId: athlete.id, team: { coachId: user.id } },
+    select: { id: true },
+  });
+  if (!member) {
+    return { ok: false, error: "Atlet tidak ada di tim Anda." };
+  }
+
+  // Find or create parent
+  let parent = await prisma.profile.findUnique({
+    where: { email: pe },
+    select: { id: true, role: true },
+  });
+  if (!parent) {
+    // Create parent account with default password
+    const { hash } = await import("bcryptjs");
+    const passwordHash = await hash("parent123", 10);
+    parent = await prisma.profile.create({
+      data: {
+        fullName: pe.split("@")[0],
+        email: pe,
+        role: "PARENT",
+        passwordHash,
+      },
+      select: { id: true, role: true },
+    });
+  }
+
+  // Check duplicate link
+  const existing = await prisma.parentAthleteLink.findFirst({
+    where: { parentId: parent.id, athleteId: athlete.id },
+    select: { id: true },
+  });
+  if (existing) return { ok: false, error: "Link antara orang tua ini dan atlet sudah ada." };
+
+  // Create link with pending status
+  await prisma.parentAthleteLink.create({
+    data: {
+      parentId: parent.id,
+      athleteId: athlete.id,
+      relationship: relationship.trim(),
+      status: "pending",
+    },
+  });
+
+  // Set athlete consent status to pending
+  await prisma.profile.update({
+    where: { id: athlete.id },
+    data: { parentConsentStatus: "pending" },
+  });
+
+  revalidatePath("/pengaturan");
+  return { ok: true };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Hapus akun (soft delete)
+// ─────────────────────────────────────────────────────────────
+
+export async function deleteAccount(
+  _prevState: SettingsState,
+  formData: FormData,
+): Promise<SettingsState> {
+  const user = await requireUser();
+
+  const password = formData.get("password");
+  if (typeof password !== "string" || !password) {
+    return { error: "Password wajib diisi untuk menghapus akun." };
+  }
+
+  if (!user.passwordHash) {
+    return { error: "Akun ini tidak menggunakan password." };
+  }
+  const matches = await compare(password, user.passwordHash);
+  if (!matches) {
+    return { error: "Password salah." };
+  }
+
+  // Soft delete: set deletedAt
+  await prisma.profile.update({
+    where: { id: user.id },
+    data: { deletedAt: new Date() },
+  });
+
+  // Destroy session → clear cookie
+  await destroySession();
+
   return { ok: true };
 }

@@ -399,3 +399,235 @@ export async function reorderSessionDrills(
   revalidatePath("/pelatih/program");
   return { ok: true };
 }
+
+// ─────────────────────────────────────────────────────────────
+// #10  Template Program — Simpan / Clone / Hapus template
+// ─────────────────────────────────────────────────────────────
+
+export async function saveAsTemplate(
+  programId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  if (!isOwner(user.role)) return { ok: false, error: "Akses ditolak." };
+
+  const program = await getProgram(programId, user);
+  if (!program) return { ok: false, error: "Program tidak ditemukan." };
+
+  await prisma.program.update({
+    where: { id: programId },
+    data: { isTemplate: true },
+  });
+
+  revalidatePath("/pelatih/program");
+  return { ok: true };
+}
+
+export async function cloneProgram(
+  templateId: string,
+  newName: string,
+): Promise<{ ok: boolean; id?: string; error?: string }> {
+  const user = await requireUser();
+  if (!isOwner(user.role)) return { ok: false, error: "Akses ditolak." };
+
+  const template = await prisma.program.findFirst({
+    where: { id: templateId, isTemplate: true },
+    include: {
+      phases: {
+        orderBy: { orderIndex: "asc" },
+        include: {
+          cycles: {
+            orderBy: { weekNumber: "asc" },
+            include: {
+              sessions: {
+                include: {
+                  sessionDrills: { orderBy: { orderIndex: "asc" } },
+                },
+              },
+            },
+          },
+        },
+      },
+      sessions: {
+        where: { cycleId: null },
+        include: {
+          sessionDrills: { orderBy: { orderIndex: "asc" } },
+        },
+      },
+    },
+  });
+  if (!template) return { ok: false, error: "Template tidak ditemukan." };
+
+  const name = newName.trim() || `Salinan: ${template.name}`;
+  const start = template.startDate ?? new Date();
+  const end = template.endDate ?? new Date(start.getTime() + 28 * DAY_MS);
+
+  let teamId: string | null = null;
+  let ownerId = user.id;
+  if (template.type === "team") {
+    const team = await prisma.team.findFirst({
+      where:
+        user.role === "ASSISTANT"
+          ? { members: { some: { athleteId: user.id, roleInTeam: "assistant_coach" } } }
+          : { coachId: user.id },
+      select: { id: true, coachId: true },
+    });
+    if (!team) return { ok: false, error: "Tim tidak ditemukan." };
+    teamId = team.id;
+    ownerId = team.coachId;
+  }
+
+  const newProgram = await prisma.program.create({
+    data: {
+      name,
+      type: template.type,
+      ownerId,
+      teamId,
+      description: template.description,
+      startDate: start,
+      endDate: end,
+      status: "draft",
+    },
+  });
+
+  // Clone phases → cycles → sessions → sessionDrills
+  for (const phase of template.phases) {
+    const newPhase = await prisma.programPhase.create({
+      data: {
+        programId: newProgram.id,
+        name: phase.name,
+        orderIndex: phase.orderIndex,
+        startDate: phase.startDate,
+        endDate: phase.endDate,
+        focusNotes: phase.focusNotes,
+      },
+    });
+
+    for (const cycle of phase.cycles) {
+      const newCycle = await prisma.programCycle.create({
+        data: {
+          phaseId: newPhase.id,
+          name: cycle.name,
+          weekNumber: cycle.weekNumber,
+          startDate: cycle.startDate,
+          endDate: cycle.endDate,
+        },
+      });
+
+      for (const session of cycle.sessions) {
+        const newSession = await prisma.session.create({
+          data: {
+            programId: newProgram.id,
+            cycleId: newCycle.id,
+            name: session.name,
+            teamId,
+            scheduledAt: session.scheduledAt,
+            durationMinutes: session.durationMinutes,
+            location: session.location,
+            notes: session.notes,
+          },
+        });
+
+        for (const sd of session.sessionDrills) {
+          await prisma.sessionDrill.create({
+            data: {
+              sessionId: newSession.id,
+              drillId: sd.drillId,
+              orderIndex: sd.orderIndex,
+              targetValue: sd.targetValue,
+              targetUnit: sd.targetUnit,
+              durationMinutes: sd.durationMinutes,
+              isMandatory: sd.isMandatory,
+              assignedPositions: sd.assignedPositions as unknown as InputJsonValue,
+              notes: sd.notes,
+            },
+          });
+        }
+      }
+    }
+  }
+
+  // Clone loose sessions (cycleId: null)
+  for (const session of template.sessions) {
+    const newSession = await prisma.session.create({
+      data: {
+        programId: newProgram.id,
+        name: session.name,
+        teamId,
+        scheduledAt: session.scheduledAt,
+        durationMinutes: session.durationMinutes,
+        location: session.location,
+        notes: session.notes,
+      },
+    });
+
+    for (const sd of session.sessionDrills) {
+      await prisma.sessionDrill.create({
+        data: {
+          sessionId: newSession.id,
+          drillId: sd.drillId,
+          orderIndex: sd.orderIndex,
+          targetValue: sd.targetValue,
+          targetUnit: sd.targetUnit,
+          durationMinutes: sd.durationMinutes,
+          isMandatory: sd.isMandatory,
+          assignedPositions: sd.assignedPositions as unknown as InputJsonValue,
+          notes: sd.notes,
+        },
+      });
+    }
+  }
+
+  revalidatePath("/pelatih/program");
+  return { ok: true, id: newProgram.id };
+}
+
+export async function removeTemplate(
+  programId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  if (!isOwner(user.role)) return { ok: false, error: "Akses ditolak." };
+
+  const program = await getProgram(programId, user);
+  if (!program) return { ok: false, error: "Program tidak ditemukan." };
+
+  await prisma.program.update({
+    where: { id: programId },
+    data: { isTemplate: false },
+  });
+
+  revalidatePath("/pelatih/program");
+  return { ok: true };
+}
+
+// ─────────────────────────────────────────────────────────────
+// #11  Target per Drill
+// ─────────────────────────────────────────────────────────────
+
+export async function setDrillTarget(
+  sessionDrillId: string,
+  programId: string,
+  targetValue: number | null,
+  targetUnit: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  if (!isOwner(user.role)) return { ok: false, error: "Akses ditolak." };
+
+  const program = await getProgram(programId, user);
+  if (!program) return { ok: false, error: "Program tidak ditemukan." };
+
+  const sd = await prisma.sessionDrill.findFirst({
+    where: { id: sessionDrillId, session: { programId } },
+  });
+  if (!sd) return { ok: false, error: "Drill tidak ditemukan." };
+
+  await prisma.sessionDrill.update({
+    where: { id: sessionDrillId },
+    data: {
+      targetValue,
+      targetUnit: targetUnit || null,
+    },
+  });
+
+  revalidatePath("/pelatih/program");
+  return { ok: true };
+}

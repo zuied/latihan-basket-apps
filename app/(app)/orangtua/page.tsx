@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, SectionTitle } from "@/components/ui/card";
@@ -20,26 +19,62 @@ const READINESS_META: Record<string, { label: string; variant: "success" | "warn
 export default async function ParentHome() {
   const user = await requireUser();
 
-  const links = await prisma.parentAthleteLink.findMany({
-    where: { parentId: user.id, status: "active" },
-    include: {
-      athlete: {
-        include: {
-          teamMemberships: { include: { team: true } },
-          readinessRecords: {
-            where: { validUntil: { gte: new Date() } },
-            orderBy: { updatedAt: "desc" },
-            take: 1,
+  const [activeLinks, pendingLinks] = await Promise.all([
+    prisma.parentAthleteLink.findMany({
+      where: { parentId: user.id, status: "active" },
+      include: {
+        athlete: {
+          include: {
+            teamMemberships: { include: { team: true } },
+            readinessRecords: {
+              where: { validUntil: { gte: new Date() } },
+              orderBy: { updatedAt: "desc" },
+              take: 1,
+            },
+            sessionLogs: { orderBy: { loggedAt: "desc" }, take: 3, include: { session: true } },
           },
-          sessionLogs: { orderBy: { loggedAt: "desc" }, take: 3, include: { session: true } },
         },
       },
-    },
-  });
+    }),
+    prisma.parentAthleteLink.findMany({
+      where: { parentId: user.id, status: "pending" },
+      select: { id: true },
+    }),
+  ]);
 
-  if (links.length === 0) notFound();
+  // If no active links, show waiting or empty state
+  if (activeLinks.length === 0) {
+    return (
+      <div className="mx-auto max-w-6xl">
+        <SectionTitle
+          title={`Halo, ${user.fullName}`}
+          description="Pantau perkembangan putra/putri Anda."
+        />
+        {pendingLinks.length > 0 ? (
+          <div className="rounded-2xl border border-dashed border-warning bg-warning-faint py-10 text-center">
+            <p className="text-h4">⏳</p>
+            <p className="mt-1 text-small font-bold">Menunggu persetujuan</p>
+            <p className="text-tiny text-ink-soft">
+              Anda memiliki {pendingLinks.length} undangan yang belum disetujui.
+            </p>
+            <a
+              href="/orangtua/consent"
+              className="mt-3 inline-flex items-center gap-1 text-small font-semibold text-primary hover:underline"
+            >
+              Lihat undangan →
+            </a>
+          </div>
+        ) : (
+          <EmptyState
+            title="Belum ada akses"
+            description="Hubungi pelatih untuk mendapatkan tautan akses ke data atlet."
+          />
+        )}
+      </div>
+    );
+  }
 
-  const childIds = links.map((link) => link.athleteId);
+  const childIds = activeLinks.map((link) => link.athleteId);
   const announcements = await prisma.announcement.findMany({
     where: { athleteId: { in: childIds } },
     orderBy: { createdAt: "desc" },
@@ -55,7 +90,7 @@ export default async function ParentHome() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <div className="space-y-4 lg:col-span-3">
-          {links.map((link) => {
+          {activeLinks.map((link) => {
             const athlete = link.athlete;
             const readiness = athlete.readinessRecords[0];
             const meta = readiness ? READINESS_META[readiness.status] : undefined;

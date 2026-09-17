@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { cn } from "@/lib/cn";
+import { ReadinessManager } from "./readiness-manager";
+import { recoverInjury } from "@/app/(app)/pelatih/atlet/injury-actions";
 
 export type AthleteProfileData = {
+  athleteId: string;
   fullName: string;
   position: string | null;
   heightCm: number | null;
@@ -18,7 +21,9 @@ export type AthleteProfileData = {
     injuryType: string;
     severity: string;
     startDate: string;
+    resolvedDate: string | null;
     notes: string | null;
+    status: string;
   }[];
   programs: {
     id: string;
@@ -40,9 +45,23 @@ export type AthleteProfileData = {
     label: string;
     minutes: number;
   }[];
+  sessionHistory: {
+    id: string;
+    sessionName: string;
+    date: string;
+    attendanceStatus: string;
+    rpe: number | null;
+    durationMinutes: number;
+    drillCount: number;
+  }[];
+  performanceTrend: {
+    rpeByWeek: { label: string; avgRpe: number }[];
+    attendanceByWeek: { label: string; total: number; attended: number }[];
+    completionRate: number | null;
+  };
 };
 
-const TABS = ["Ringkasan", "Program aktif", "Riwayat cedera", "Asesmen"] as const;
+const TABS = ["Ringkasan", "Program aktif", "Riwayat sesi", "Riwayat cedera", "Asesmen"] as const;
 type Tab = (typeof TABS)[number];
 
 export function AthleteProfile({ data }: { data: AthleteProfileData }) {
@@ -98,6 +117,7 @@ export function AthleteProfile({ data }: { data: AthleteProfileData }) {
             {readinessLabel}
           </span>
         ) : null}
+        <ReadinessManager athleteId={data.athleteId} currentStatus={data.readiness} />
       </div>
 
       <div className="mt-5 flex flex-wrap gap-1.5 border-b border-line">
@@ -174,6 +194,40 @@ export function AthleteProfile({ data }: { data: AthleteProfileData }) {
               ) : null}
             </div>
           </section>
+
+          <section>
+            <h2 className="mb-3 text-h4 font-bold tracking-tight">Tren performa</h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-line bg-panel p-4 shadow-sm">
+                <p className="text-tiny text-ink-faint">RPE rata-rata</p>
+                <p className="mt-1 text-h3 font-bold text-accent">
+                  {data.performanceTrend.rpeByWeek.at(-1)?.avgRpe ?? 0}
+                </p>
+                <p className="text-tiny text-ink-faint">minggu ini (1-10)</p>
+              </div>
+              <div className="rounded-2xl border border-line bg-panel p-4 shadow-sm">
+                <p className="text-tiny text-ink-faint">Kehadiran</p>
+                <p className="mt-1 text-h3 font-bold text-success">
+                  {(() => {
+                    const a = data.performanceTrend.attendanceByWeek.at(-1);
+                    return a && a.total > 0
+                      ? `${Math.round((a.attended / a.total) * 100)}%`
+                      : "—";
+                  })()}
+                </p>
+                <p className="text-tiny text-ink-faint">minggu ini</p>
+              </div>
+              <div className="rounded-2xl border border-line bg-panel p-4 shadow-sm">
+                <p className="text-tiny text-ink-faint">Kelengkapan drill</p>
+                <p className="mt-1 text-h3 font-bold text-purple">
+                  {data.performanceTrend.completionRate !== null
+                    ? `${data.performanceTrend.completionRate}%`
+                    : "—"}
+                </p>
+                <p className="text-tiny text-ink-faint">28 hari terakhir</p>
+              </div>
+            </div>
+          </section>
         </div>
       ) : null}
 
@@ -203,37 +257,71 @@ export function AthleteProfile({ data }: { data: AthleteProfileData }) {
         </div>
       ) : null}
 
+      {tab === "Riwayat sesi" ? (
+        <div className="mt-5">
+          {data.sessionHistory.length === 0 ? (
+            <p className="text-small text-ink-soft">Belum ada riwayat sesi.</p>
+          ) : (
+            <div className="space-y-2">
+              {data.sessionHistory.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-panel p-4 shadow-sm"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-small font-bold">{s.sessionName}</p>
+                    <p className="mt-0.5 text-tiny text-ink-soft">
+                      {new Date(s.date).toLocaleDateString("id-ID", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}{" "}
+                      · {s.durationMinutes} menit · {s.drillCount} drill
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {s.rpe !== null ? (
+                        <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold text-accent">
+                        RPE {s.rpe}
+                      </span>
+                    ) : null}
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                        s.attendanceStatus === "present"
+                          ? "bg-success-soft text-success"
+                          : s.attendanceStatus === "late"
+                            ? "bg-warning-soft text-warning"
+                            : s.attendanceStatus === "absent"
+                              ? "bg-danger-soft text-danger"
+                              : "bg-neutral-soft text-ink-soft",
+                      )}
+                    >
+                      {s.attendanceStatus === "present"
+                        ? "Hadir"
+                        : s.attendanceStatus === "late"
+                          ? "Terlambat"
+                          : s.attendanceStatus === "absent"
+                            ? "Absen"
+                            : "Izin"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+
       {tab === "Riwayat cedera" ? (
         <div className="mt-5 space-y-2">
           {data.activeInjuries.length === 0 ? (
             <p className="text-small text-ink-soft">
-              Tidak ada catatan cedera aktif.
+              Tidak ada catatan cedera.
             </p>
           ) : (
             data.activeInjuries.map((i) => (
-              <div
-                key={i.id}
-                className="rounded-2xl border border-line bg-panel p-4 shadow-sm"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-small font-bold">
-                      {i.bodyPart} — {i.injuryType}
-                    </p>
-                    <p className="mt-0.5 text-tiny text-ink-soft">
-                      Sejak{" "}
-                      {new Date(i.startDate).toLocaleDateString("id-ID")} ·{" "}
-                      {i.severity}
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-warning-soft px-2.5 py-0.5 text-tiny font-semibold text-warning">
-                    Aktif
-                  </span>
-                </div>
-                {i.notes ? (
-                  <p className="mt-2 text-tiny text-ink-soft">{i.notes}</p>
-                ) : null}
-              </div>
+              <InjuryCard key={i.id} injury={i} />
             ))
           )}
         </div>
@@ -279,6 +367,64 @@ export function AthleteProfile({ data }: { data: AthleteProfileData }) {
             )}
           </section>
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+function InjuryCard({
+  injury,
+}: {
+  injury: AthleteProfileData["activeInjuries"][number];
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [resolved, setResolved] = useState(injury.status === "resolved");
+
+  const isActive = injury.status === "active" && !resolved;
+
+  return (
+    <div className="rounded-2xl border border-line bg-panel p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-small font-bold">
+            {injury.bodyPart} — {injury.injuryType}
+          </p>
+          <p className="mt-0.5 text-tiny text-ink-soft">
+            Sejak {new Date(injury.startDate).toLocaleDateString("id-ID")} ·{" "}
+            {injury.severity}
+            {injury.resolvedDate || resolved
+              ? ` · Sembuh ${new Date(injury.resolvedDate!).toLocaleDateString("id-ID")}`
+              : ""}
+          </p>
+        </div>
+        <span
+          className={cn(
+            "rounded-full px-2.5 py-0.5 text-tiny font-semibold",
+            isActive
+              ? "bg-warning-soft text-warning"
+              : "bg-success-soft text-success",
+          )}
+        >
+          {isActive ? "Aktif" : "Sembuh"}
+        </span>
+      </div>
+      {injury.notes ? (
+        <p className="mt-2 text-tiny text-ink-soft">{injury.notes}</p>
+      ) : null}
+      {isActive ? (
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() =>
+            startTransition(async () => {
+              const res = await recoverInjury(injury.id);
+              if (res.ok) setResolved(true);
+            })
+          }
+          className="mt-3 rounded-lg border border-success/30 px-3 py-1.5 text-tiny font-medium text-success transition-colors hover:bg-success-faint disabled:opacity-60"
+        >
+          {isPending ? "Menyimpan..." : "Tandai sembuh"}
+        </button>
       ) : null}
     </div>
   );
