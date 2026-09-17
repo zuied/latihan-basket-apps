@@ -177,7 +177,7 @@ export default async function CoachTeamStatsPage() {
               <li key={r.id} className="flex items-center gap-3">
                 <Link
                   href={`/pelatih/atlet/${r.id}`}
-                  className="w-40 shrink-0 truncate text-small font-semibold hover:text-primary"
+                  className="w-28 shrink-0 truncate text-small font-semibold hover:text-primary sm:w-40"
                 >
                   {r.jerseyNumber ? `#${r.jerseyNumber} ` : ""}{r.name}
                 </Link>

@@ -92,88 +92,99 @@ export function AttendanceSheet({
         ))}
       </div>
 
-      {undefinedCount > 0 ? (
-        <p className="mb-3 rounded-xl bg-warning-soft px-3 py-2 text-tiny text-warning">
-          ⚠️ {undefinedCount} atlet belum diberi status.
-        </p>
-      ) : null}
+      {athletes.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-line-strong bg-panel px-6 py-12 text-center">
+          <p className="text-base font-semibold">Belum ada atlet aktif</p>
+          <p className="mx-auto mt-1 max-w-sm text-small text-ink-soft">
+            Kehadiran bisa diisi setelah ada atlet yang bergabung dengan tim ini.
+          </p>
+        </div>
+      ) : (
+        <>
+          {undefinedCount > 0 ? (
+            <p className="mb-3 rounded-xl bg-warning-soft px-3 py-2 text-tiny text-warning">
+              ⚠️ {undefinedCount} atlet belum diberi status.
+            </p>
+          ) : null}
 
-      <ul className="space-y-2.5">
-        {athletes.map((a) => {
-          const sel = statusOf(a.athleteId);
-          return (
-            <li key={a.athleteId} className="rounded-2xl border border-line bg-panel p-3 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate text-small font-bold">{a.fullName}</p>
-                  <p className="mt-0.5 text-tiny text-ink-soft">
-                    {a.jerseyNumber ? `#${a.jerseyNumber} · ` : ""}
-                    {a.position ?? "Posisi belum diisi"}
-                  </p>
-                  {a.readiness ? (
-                    <p className="mt-0.5 text-tiny">
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1 rounded-full px-1.5 py-px text-tiny font-semibold",
-                          a.readiness === "full"
-                            ? "bg-success-soft text-success"
-                            : a.readiness === "limited"
-                              ? "bg-warning-soft text-warning"
-                              : "bg-danger-soft text-danger",
-                        )}
-                      >
-                        {a.readiness === "full"
-                          ? "Siap"
-                          : a.readiness === "limited"
-                            ? "Latihan dibatasi"
-                            : "Istirahat"}
-                        {a.activeInjury ? ` · ${a.activeInjury}` : ""}
-                      </span>
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {STATUSES.map((s) => {
-                    const active = sel === s.value;
-                    return (
-                      <button
-                        key={s.value}
-                        type="button"
-                        onClick={() => setPicked((p) => {
-                          const next = new Map(p);
-                          if (next.get(a.athleteId) === s.value) next.delete(a.athleteId);
-                          else next.set(a.athleteId, s.value);
-                          return next;
-                        })}
-                        aria-pressed={active}
-                        aria-label={`${a.fullName}: ${s.label}`}
-                        className={cn(
-                          "flex items-center gap-1 rounded-full border px-3 py-1.5 text-tiny font-bold transition-colors",
-                          active
-                            ? cn("border-transparent text-white", s.active)
-                            : cn("border-line bg-canvas text-ink-soft hover:border-line-strong", s.soft),
-                        )}
-                      >
-                        <span aria-hidden className="text-[11px]">{s.icon}</span>
-                        {s.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+          <ul className="space-y-2.5">
+            {athletes.map((a) => {
+              const sel = statusOf(a.athleteId);
+              return (
+                <li key={a.athleteId} className="rounded-2xl border border-line bg-panel p-3 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-small font-bold">{a.fullName}</p>
+                      <p className="mt-0.5 text-tiny text-ink-soft">
+                        {a.jerseyNumber ? `#${a.jerseyNumber} · ` : ""}
+                        {a.position ?? "Posisi belum diisi"}
+                      </p>
+                      {a.readiness ? (
+                        <p className="mt-0.5 text-tiny">
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1 rounded-full px-1.5 py-px text-tiny font-semibold",
+                              a.readiness === "full"
+                                ? "bg-success-soft text-success"
+                                : a.readiness === "limited"
+                                  ? "bg-warning-soft text-warning"
+                                  : "bg-danger-soft text-danger",
+                            )}
+                          >
+                            {a.readiness === "full"
+                              ? "Siap"
+                              : a.readiness === "limited"
+                                ? "Latihan dibatasi"
+                                : "Istirahat"}
+                            {a.activeInjury ? ` · ${a.activeInjury}` : ""}
+                          </span>
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {STATUSES.map((s) => {
+                        const active = sel === s.value;
+                        return (
+                          <button
+                            key={s.value}
+                            type="button"
+                            onClick={() => setPicked((p) => {
+                              const next = new Map(p);
+                              if (next.get(a.athleteId) === s.value) next.delete(a.athleteId);
+                              else next.set(a.athleteId, s.value);
+                              return next;
+                            })}
+                            aria-pressed={active}
+                            aria-label={`${a.fullName}: ${s.label}`}
+                            className={cn(
+                              "flex items-center gap-1 rounded-full border px-3 py-1.5 text-tiny font-bold transition-colors",
+                              active
+                                ? cn("border-transparent text-white", s.active)
+                                : cn("border-line bg-canvas text-ink-soft hover:border-line-strong", s.soft),
+                            )}
+                          >
+                            <span aria-hidden className="text-[11px]">{s.icon}</span>
+                            {s.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
 
-      <div className="sticky bottom-4 mt-5">
-        <Button className="w-full" onClick={submit} disabled={busy}>
-          {busy ? "Menyimpan…" : `Simpan Kehadiran (${picked.size} dicentang)`}
-        </Button>
-        {notice ? (
-          <p className="mt-2 text-center text-tiny text-ink-soft">{notice}</p>
-        ) : null}
-      </div>
+          <div className="sticky bottom-4 mt-5">
+            <Button className="w-full" onClick={submit} disabled={busy}>
+              {busy ? "Menyimpan…" : `Simpan Kehadiran (${picked.size} dicentang)`}
+            </Button>
+            {notice ? (
+              <p className="mt-2 text-center text-tiny text-ink-soft">{notice}</p>
+            ) : null}
+          </div>
+        </>
+      )}
     </div>
   );
 }

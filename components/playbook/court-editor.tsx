@@ -3,7 +3,8 @@
 import { useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
-import { createPlay, savePlayElements, deletePlay } from "@/app/(app)/pelatih/program/actions";
+import { Input, Label } from "@/components/ui/field";
+import { updatePlay, deletePlay } from "@/app/(app)/pelatih/program/actions";
 
 // =====================================================================
 // Utilitas koordinat lapangan
@@ -206,23 +207,26 @@ export function CourtPreview({
 
 export function PlaybookEditor({
   play,
-  programId,
   onSaved,
   onDeleted,
+  onCreate,
 }: {
   play: PlayData;
-  programId: string;
   onSaved?: (p: PlayData) => void;
   onDeleted?: (id: string) => void;
+  onCreate?: () => void;
 }) {
   const [elements, setElements] = useState<PlayElement[]>(() =>
     Array.isArray(play.elements) ? play.elements.map(normalize) : [],
   );
+  const [name, setName] = useState(play.name);
+  const [description, setDescription] = useState(play.description ?? "");
   const [tool, setTool] = useState<Tool>("select");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ x: number; y: number } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
@@ -368,12 +372,24 @@ export function PlaybookEditor({
 
   const handleSave = async () => {
     setSaving(true);
+    setSaved(false);
     const clean = elements.filter((el) => (el as { id: string }).id !== "draft-preview");
     setElements(clean);
-    const res = await savePlayElements(play.id, clean);
+    const finalName = name.trim() || play.name;
+    const res = await updatePlay(play.id, {
+      name: finalName,
+      description,
+      elements: clean as unknown as Record<string, unknown>[],
+    });
     setSaving(false);
-    if (res.ok && onSaved) {
-      onSaved({ ...play, elements: clean });
+    if (res.ok) {
+      setSaved(true);
+      onSaved?.({
+        ...play,
+        name: finalName,
+        description: description.trim() ? description : null,
+        elements: clean,
+      });
     }
   };
 
@@ -385,27 +401,21 @@ export function PlaybookEditor({
     onDeleted?.(play.id);
   };
 
-  const handleNew = async () => {
-    const res = await createPlay(programId, "Set Play Baru");
-    if (res.ok) {
-      window.location.reload();
-    }
+  const handleNew = () => {
+    onCreate?.();
   };
 
   return (
     <div className="rounded-2xl border border-line bg-panel p-4 shadow-sm">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-small font-bold">{play.name}</p>
-          {play.description ? (
-            <p className="mt-0.5 text-tiny text-ink-soft">{play.description}</p>
-          ) : (
-            <p className="mt-0.5 text-tiny text-ink-faint">
-              Gambarkan formasi awal lalu tambahkan aksi (arrow, cut, screen).
-            </p>
-          )}
+          <p className="text-small font-bold">{name}</p>
+          <p className="mt-0.5 text-tiny text-ink-faint">
+            Gambarkan formasi awal lalu tambahkan aksi (arrow, cut, screen).
+          </p>
         </div>
         <div className="flex items-center gap-1.5">
+          {saved ? <span className="text-tiny text-success">Tersimpan</span> : null}
           <Button variant="ghost" size="sm" onClick={handleNew} className="h-auto">
             + Set Play
           </Button>
@@ -418,6 +428,33 @@ export function PlaybookEditor({
           <Button variant="secondary" size="sm" onClick={handleSave} disabled={saving} className="h-auto">
             {saving ? "Menyimpan..." : "Simpan"}
           </Button>
+        </div>
+      </div>
+
+      <div className="mb-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+        <div>
+          <Label htmlFor={`play-name-${play.id}`}>Nama play</Label>
+          <Input
+            id={`play-name-${play.id}`}
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              setSaved(false);
+            }}
+            placeholder="mis. Pick & Roll — Sisi Kiri"
+          />
+        </div>
+        <div>
+          <Label htmlFor={`play-desc-${play.id}`}>Deskripsi (opsional)</Label>
+          <Input
+            id={`play-desc-${play.id}`}
+            value={description}
+            onChange={(e) => {
+              setDescription(e.target.value);
+              setSaved(false);
+            }}
+            placeholder="Instruksi singkat jalannya set play"
+          />
         </div>
       </div>
 

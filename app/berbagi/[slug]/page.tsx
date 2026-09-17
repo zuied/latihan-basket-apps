@@ -89,7 +89,14 @@ export default async function SharedRaporPage({
               ))}
             </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="mb-6 rounded-2xl border border-line bg-panel p-5 text-center shadow-sm">
+            <p className="text-small font-semibold">Belum ada data asesmen awal</p>
+            <p className="mt-1 text-tiny text-ink-soft">
+              Asesmen awal {summary.athleteName} belum dilakukan.
+            </p>
+          </div>
+        )}
 
         {summary.latestSessions.length > 0 ? (
           <div className="rounded-2xl border border-line bg-panel p-5 shadow-sm">
@@ -115,7 +122,14 @@ export default async function SharedRaporPage({
               ))}
             </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="rounded-2xl border border-line bg-panel p-5 text-center shadow-sm">
+            <p className="text-small font-semibold">Belum ada catatan kehadiran</p>
+            <p className="mt-1 text-tiny text-ink-soft">
+              Belum ada sesi yang tercatat untuk rapor ini.
+            </p>
+          </div>
+        )}
       </main>
     </div>
   );

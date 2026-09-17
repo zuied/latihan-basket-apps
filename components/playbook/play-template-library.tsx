@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { CourtPreview } from "@/components/playbook/court-editor";
 import { clonePlay } from "@/app/(app)/pelatih/program/actions";
@@ -15,10 +16,18 @@ export type TemplatePlay = {
 export function PlayTemplateLibrary({
   templates,
   programId,
+  onCloned,
 }: {
   templates: TemplatePlay[];
   programId: string;
+  onCloned?: (play: {
+    id: string;
+    name: string;
+    description: string | null;
+    elements: Record<string, unknown>[];
+  }) => void;
 }) {
+  const router = useRouter();
   const [cloningId, setCloningId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -35,8 +44,12 @@ export function PlayTemplateLibrary({
     (async () => {
       const res = await clonePlay(templateId, programId);
       setCloningId(null);
-      if (res.ok && res.id) {
-        window.location.reload();
+      if (res.ok && res.play) {
+        if (onCloned) {
+          onCloned(res.play);
+        } else {
+          router.refresh();
+        }
       } else if (res.error) {
         setError(res.error);
       }

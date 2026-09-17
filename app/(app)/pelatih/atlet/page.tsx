@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { SectionTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
 
@@ -40,7 +41,28 @@ export default async function CoachAthletesPage() {
     },
   });
 
-  if (teams.length === 0) notFound();
+  if (teams.length === 0) {
+    return (
+      <div className="mx-auto max-w-6xl">
+        <SectionTitle
+          title="Tim & Atlet"
+          description="Kelola roster dan status kesiapan atlet."
+        />
+        <EmptyState
+          title="Belum ada tim"
+          description="Buat tim terlebih dahulu untuk mulai menyusun roster atlet."
+          action={
+            <Link
+              href="/pelatih/tim"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 font-medium text-white shadow-sm transition-colors hover:bg-primary-strong"
+            >
+              Buat tim
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
 
   const initials = (name: string) =>
     name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
@@ -56,6 +78,11 @@ export default async function CoachAthletesPage() {
         <div key={team.id} className="mb-8">
           <p className="mb-3 text-h4 font-bold tracking-tight">{team.name}</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {team.members.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-line-strong bg-panel px-5 py-8 text-center text-small text-ink-soft">
+                Belum ada atlet aktif di tim ini.
+              </p>
+            ) : null}
             {team.members.map((member) => {
               const readiness = member.athlete.readinessRecords[0];
               const hasInjury = member.athlete.injuriesSuffered.length > 0;

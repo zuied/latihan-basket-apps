@@ -20,7 +20,84 @@ const dateLabel = (d: Date) =>
     month: "short",
   }).format(d);
 
+function mapSessionDrill(sd: {
+  id: string;
+  drillId: string;
+  targetValue: number | null;
+  targetUnit: string | null;
+  isMandatory: boolean;
+  assignedPositions: unknown;
+  drill: { name: string; subCategory: string; relevantPositions: unknown };
+}) {
+  const explicit = Array.isArray(sd.assignedPositions)
+    ? sd.assignedPositions.map(String)
+    : [];
+  const drillPositions = Array.isArray(sd.drill.relevantPositions)
+    ? sd.drill.relevantPositions.map(String)
+    : [];
+  const drillIsBroad =
+    drillPositions.length === 0 || drillPositions.includes("Semua");
+
+  // Cakupan eksplisit menang; jika kosong (data lama), warisi posisi drill
+  // agar drill khusus posisi tidak salah tampil sebagai "wajib semua".
+  const positions =
+    explicit.length > 0
+      ? explicit
+      : drillIsBroad
+        ? ["Semua"]
+        : drillPositions;
+
+  return {
+    id: sd.id,
+    drillId: sd.drillId,
+    drillName: sd.drill.name,
+    subCategory: sd.drill.subCategory,
+    targetText: targetText(sd.targetValue, sd.targetUnit),
+    isMandatory: positions.includes("Semua"),
+    assignedPositions: positions,
+  };
+}
+
+function mapSession(session: {
+  id: string;
+  name: string;
+  durationMinutes: number;
+  scheduledAt: Date;
+  sessionDrills: Parameters<typeof mapSessionDrill>[0][];
+}) {
+  return {
+    id: session.id,
+    name: session.name,
+    durationMinutes: session.durationMinutes,
+    dateLabel: dateLabel(session.scheduledAt),
+    drills: session.sessionDrills.map(mapSessionDrill),
+  };
+}
+
 function mapProgram(raw: NonNullable<Awaited<ReturnType<typeof findPrograms>>[number]>): BuilderProgram {
+  const cycleGroups = raw.phases.flatMap((phase) =>
+    phase.cycles.map((cycle) => ({
+      id: cycle.id,
+      name: cycle.name,
+      weekNumber: cycle.weekNumber,
+      sessions: cycle.sessions.map(mapSession),
+    })),
+  );
+
+  // Sesi yang tidak terikat minggu (mis. program personal) tetap ditampilkan
+  // sebagai grup tersendiri agar tidak hilang dari builder.
+  const looseGroup =
+    raw.sessions.length > 0
+      ? [
+          {
+            id: `${raw.id}__tanpa-minggu`,
+            name: "Tanpa minggu",
+            weekNumber: 0,
+            sessions: raw.sessions.map(mapSession),
+          },
+        ]
+      : [];
+
   return {
     id: raw.id,
     name: raw.name,
@@ -35,27 +112,7 @@ function mapProgram(raw: NonNullable<Awaited<ReturnType<typeof findPrograms>>[nu
       endDate: phase.endDate?.toISOString() ?? null,
       focusNotes: phase.focusNotes,
     })),
-    cycles:
-      raw.phases.flatMap((phase) =>
-        phase.cycles.map((cycle) => ({
-          id: cycle.id,
-          name: cycle.name,
-          weekNumber: cycle.weekNumber,
-          sessions: cycle.sessions.map((session) => ({
-            id: session.id,
-            name: session.name,
-            durationMinutes: session.durationMinutes,
-            dateLabel: dateLabel(session.scheduledAt),
-            drills: session.sessionDrills.map((sd) => ({
-              id: sd.id,
-              drillId: sd.drillId,
-              drillName: sd.drill.name,
-              subCategory: sd.drill.subCategory,
-              targetText: targetText(sd.targetValue, sd.targetUnit),
-            })),
-          })),
-        })),
-      ) ?? [],
+    cycles: [...cycleGroups, ...looseGroup],
     plays: raw.plays.map((p) => ({
       id: p.id,
       name: p.name,
@@ -83,6 +140,16 @@ const programQueryArgs = {
               },
             },
           },
+        },
+      },
+    },
+    sessions: {
+      where: { cycleId: null },
+      orderBy: { scheduledAt: "asc" as const },
+      include: {
+        sessionDrills: {
+          orderBy: { orderIndex: "asc" as const },
+          include: { drill: true },
         },
       },
     },
@@ -114,6 +181,7 @@ export default async function CoachProgramsPage() {
         name: true,
         subCategory: true,
         difficulty: true,
+        relevantPositions: true,
       },
     }),
     prisma.play.findMany({
@@ -130,12 +198,18 @@ export default async function CoachProgramsPage() {
     elements: Array.isArray(t.elements) ? (t.elements as Record<string, unknown>[]) : [],
   }));
 
-  if (rawPrograms.length === 0) notFound();
-
   const programs = rawPrograms.map(mapProgram);
   const teamPrograms = programs.filter((p) => p.type === "team");
   const personalPrograms = programs.filter((p) => p.type === "personal");
-  const bankDrills: BankDrill[] = bank;
+  const bankDrills: BankDrill[] = bank.map((b) => ({
+    id: b.id,
+    name: b.name,
+    subCategory: b.subCategory,
+    difficulty: b.difficulty,
+    positions: Array.isArray(b.relevantPositions)
+      ? b.relevantPositions.map(String)
+      : [],
+  }));
 
   return (
     <ProgramBuilder

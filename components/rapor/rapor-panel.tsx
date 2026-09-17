@@ -74,6 +74,11 @@ export function RaporPanel({
           </p>
         ) : null}
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {athletes.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-line-strong bg-panel px-4 py-6 text-center text-small text-ink-soft">
+              Belum ada atlet. Tambahkan atlet ke tim untuk membuat tautan rapor.
+            </p>
+          ) : null}
           {athletes.map((a) => (
             <div
               key={a.id}

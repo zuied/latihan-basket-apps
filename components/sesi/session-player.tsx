@@ -33,6 +33,7 @@ export function SessionPlayer({
     () => Object.fromEntries(drills.map((d) => [d.id, null])),
   );
   const [saved, setSaved] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
   const [isPending, startTransition] = React.useTransition();
   const router = useRouter();
 
@@ -41,21 +42,26 @@ export function SessionPlayer({
   const unit = drill.targetUnit ?? TARGET_UNIT_LABEL[drill.targetType] ?? "";
 
   const saveAll = () => {
+    setSaveError(null);
     startTransition(async () => {
-      const { saveSessionResults } = await import(
-        "@/app/(app)/atlet/sesi/actions"
-      );
-      await saveSessionResults({
-        sessionId,
-        athleteId,
-        results: drills.map((d) => ({
-          sessionDrillId: d.id,
-          actualValue: values[d.id] ?? 0,
-          unit,
-        })),
-      });
-      setSaved(true);
-      setTimeout(() => router.push("/atlet"), 800);
+      try {
+        const { saveSessionResults } = await import(
+          "@/app/(app)/atlet/sesi/actions"
+        );
+        await saveSessionResults({
+          sessionId,
+          athleteId,
+          results: drills.map((d) => ({
+            sessionDrillId: d.id,
+            actualValue: values[d.id] ?? 0,
+            unit,
+          })),
+        });
+        setSaved(true);
+        setTimeout(() => router.push("/atlet"), 800);
+      } catch {
+        setSaveError("Gagal menyimpan hasil. Periksa koneksi lalu coba lagi.");
+      }
     });
   };
 
@@ -118,6 +124,11 @@ export function SessionPlayer({
       </p>
 
       {/* Actions */}
+      {saveError ? (
+        <p className="mb-3 text-center text-tiny font-medium text-danger" role="alert">
+          {saveError}
+        </p>
+      ) : null}
       <button
         type="button"
         disabled={isPending}

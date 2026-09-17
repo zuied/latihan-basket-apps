@@ -7,8 +7,10 @@ import { cn } from "@/lib/cn";
 const NAV: Record<string, { label: string; href: string }[]> = {
   COACH: [
     { label: "Dashboard", href: "/pelatih" },
+    { label: "Kelola Tim", href: "/pelatih/tim" },
     { label: "Tim & Atlet", href: "/pelatih/atlet" },
     { label: "Program", href: "/pelatih/program" },
+    { label: "Periodisasi", href: "/pelatih/periodisasi" },
     { label: "Kalender", href: "/pelatih/kalender" },
     { label: "Kehadiran", href: "/pelatih/kehadiran" },
     { label: "Statistik", href: "/pelatih/statistik" },
@@ -20,8 +22,10 @@ const NAV: Record<string, { label: string; href: string }[]> = {
   ],
   ASSISTANT: [
     { label: "Dashboard", href: "/pelatih" },
+    { label: "Kelola Tim", href: "/pelatih/tim" },
     { label: "Tim & Atlet", href: "/pelatih/atlet" },
     { label: "Program", href: "/pelatih/program" },
+    { label: "Periodisasi", href: "/pelatih/periodisasi" },
     { label: "Kalender", href: "/pelatih/kalender" },
     { label: "Kehadiran", href: "/pelatih/kehadiran" },
     { label: "Statistik", href: "/pelatih/statistik" },

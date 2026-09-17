@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { SectionTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/cn";
 
 const HARI = [
@@ -163,7 +164,24 @@ export default async function CoachCalendarPage({
         </nav>
       </div>
 
-      {isMonthly ? (
+      {sessions.length === 0 ? (
+        <EmptyState
+          title="Tidak ada sesi"
+          description={
+            isMonthly
+              ? "Belum ada sesi pada bulan ini. Jadwalkan sesi lewat Program."
+              : "Belum ada sesi pada minggu ini. Jadwalkan sesi lewat Program."
+          }
+          action={
+            <Link
+              href="/pelatih/program"
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 font-medium text-white shadow-sm transition-colors hover:bg-primary-strong"
+            >
+              Ke Program
+            </Link>
+          }
+        />
+      ) : isMonthly ? (
         <MonthlyView
           year={activeYear}
           month={activeMonth}

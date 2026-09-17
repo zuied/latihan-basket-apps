@@ -96,3 +96,113 @@ export async function changePassword(
 
   return { ok: true };
 }
+
+// ─────────────────────────────────────────────────────────────
+// Kelola akses (layar #23 PRD UI/UX)
+// ─────────────────────────────────────────────────────────────
+
+const ACCESS_ROLES = ["COACH"];
+
+function isAccessManager(role: string) {
+  return ACCESS_ROLES.includes(role);
+}
+
+export async function addAssistant(
+  teamId: string,
+  email: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  if (!isAccessManager(user.role)) return { ok: false, error: "Akses ditolak." };
+
+  const team = await prisma.team.findFirst({
+    where: { id: teamId, coachId: user.id },
+    select: { id: true },
+  });
+  if (!team) return { ok: false, error: "Tim tidak ditemukan." };
+
+  const em = email.trim().toLowerCase();
+  if (!em) return { ok: false, error: "Email wajib diisi." };
+
+  const candidate = await prisma.profile.findUnique({
+    where: { email: em },
+    select: { id: true, fullName: true, role: true },
+  });
+  if (!candidate) {
+    return { ok: false, error: `Tidak ada akun dengan email ${em}.` };
+  }
+  if (candidate.role !== "ASSISTANT") {
+    return {
+      ok: false,
+      error: `Akun ${em} berperan ${candidate.role}, bukan asisten pelatih.`,
+    };
+  }
+
+  const existing = await prisma.teamMember.findUnique({
+    where: { teamId_athleteId: { teamId, athleteId: candidate.id } },
+    select: { id: true },
+  });
+  if (existing) {
+    return { ok: false, error: "Asisten ini sudah terdaftar di tim." };
+  }
+
+  await prisma.teamMember.create({
+    data: {
+      teamId,
+      athleteId: candidate.id,
+      roleInTeam: "assistant_coach",
+      status: "active",
+    },
+  });
+
+  revalidatePath("/pengaturan");
+  return { ok: true };
+}
+
+export async function removeAssistant(
+  teamMemberId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  if (!isAccessManager(user.role)) return { ok: false, error: "Akses ditolak." };
+
+  const member = await prisma.teamMember.findFirst({
+    where: {
+      id: teamMemberId,
+      roleInTeam: "assistant_coach",
+      team: { coachId: user.id },
+    },
+    select: { id: true },
+  });
+  if (!member) return { ok: false, error: "Anggota tidak ditemukan." };
+
+  await prisma.teamMember.delete({ where: { id: member.id } });
+
+  revalidatePath("/pengaturan");
+  return { ok: true };
+}
+
+export async function setParentAccess(
+  linkId: string,
+  status: "active" | "revoked",
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  if (!isAccessManager(user.role)) return { ok: false, error: "Akses ditolak." };
+
+  const link = await prisma.parentAthleteLink.findFirst({
+    where: {
+      id: linkId,
+      athlete: {
+        teamMemberships: { some: { team: { coachId: user.id } } },
+      },
+    },
+    select: { id: true },
+  });
+  if (!link) return { ok: false, error: "Link orang tua tidak ditemukan." };
+
+  await prisma.parentAthleteLink.update({
+    where: { id: link.id },
+    data: { status },
+  });
+
+  revalidatePath("/pengaturan");
+  return { ok: true };
+}

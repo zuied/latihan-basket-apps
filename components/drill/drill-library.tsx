@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { SectionTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -126,12 +127,17 @@ export function DrillLibrary({ drills }: { drills: DrillInput[] }) {
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((drill) => (
-            <DrillCard
+            <Link
+              href={`/pelatih/drill/${drill.id}`}
               key={drill.id}
-              drill={drill}
-              onEdit={() => openEdit(drill)}
-              onDelete={() => setDeleting(drill)}
-            />
+              className="flex rounded-2xl transition-shadow hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              <DrillCard
+                drill={drill}
+                onEdit={() => openEdit(drill)}
+                onDelete={() => setDeleting(drill)}
+              />
+            </Link>
           ))}
         </div>
       )}
@@ -198,7 +204,7 @@ function DrillCard({
         <div className="flex shrink-0 gap-1">
           <button
             type="button"
-            onClick={onEdit}
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
             aria-label={`Edit ${drill.name}`}
             className="rounded-lg p-1.5 text-ink-faint transition-colors hover:bg-neutral-soft hover:text-ink"
           >
@@ -206,7 +212,7 @@ function DrillCard({
           </button>
           <button
             type="button"
-            onClick={onDelete}
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
             aria-label={`Hapus ${drill.name}`}
             className="rounded-lg p-1.5 text-ink-faint transition-colors hover:bg-danger-soft hover:text-danger"
           >

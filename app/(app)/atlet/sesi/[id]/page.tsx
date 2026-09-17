@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { EmptyState } from "@/components/ui/empty-state";
 import { SessionPlayer } from "@/components/sesi/session-player";
 import { SessionComments } from "@/components/sesi/session-comments";
 
@@ -63,19 +64,27 @@ export default async function AthleteSessionPage({
         </span>
       </div>
 
-      <SessionPlayer
-        sessionId={session.id}
-        athleteId={user.id}
-        drills={session.sessionDrills.map((sd) => ({
-          id: sd.id,
-          drillName: sd.drill.name,
-          subCategory: sd.drill.subCategory,
-          targetType: sd.drill.targetType,
-          targetValue: sd.targetValue ?? sd.drill.defaultTargetValue,
-          targetUnit: sd.targetUnit,
-          durationMinutes: sd.durationMinutes,
-        }))}
-      />
+      {session.sessionDrills.length > 0 ? (
+        <SessionPlayer
+          sessionId={session.id}
+          athleteId={user.id}
+          drills={session.sessionDrills.map((sd) => ({
+            id: sd.id,
+            drillName: sd.drill.name,
+            subCategory: sd.drill.subCategory,
+            targetType: sd.drill.targetType,
+            targetValue: sd.targetValue ?? sd.drill.defaultTargetValue,
+            targetUnit: sd.targetUnit,
+            durationMinutes: sd.durationMinutes,
+          }))}
+        />
+      ) : (
+        <EmptyState
+          className="mb-6"
+          title="Sesi ini belum punya drill"
+          description="Pelatih belum menambahkan materi latihan ke sesi ini. Cek lagi nanti."
+        />
+      )}
 
       <SessionComments
         sessionId={session.id}

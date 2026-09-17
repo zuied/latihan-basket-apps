@@ -141,7 +141,7 @@ export default async function ParentReportsPage() {
         ))}
       </div>
 
-      {athlete.assessmentResults[0] && (
+      {athlete.assessmentResults[0] ? (
         <div className="mb-6 rounded-2xl border border-line bg-panel p-5 shadow-sm">
           <p className="mb-3 text-small font-bold">Baseline asesmen awal</p>
           <p className="mb-3 text-tiny text-ink-soft">
@@ -167,9 +167,16 @@ export default async function ParentReportsPage() {
             ))}
           </div>
         </div>
+      ) : (
+        <div className="mb-6 rounded-2xl border border-line bg-panel p-5 text-center shadow-sm">
+          <p className="text-small font-semibold">Belum ada data asesmen awal</p>
+          <p className="mt-1 text-tiny text-ink-soft">
+            Asesmen awal {athlete.fullName} belum dilakukan.
+          </p>
+        </div>
       )}
 
-      {athlete.sessionLogs.length > 0 && (
+      {athlete.sessionLogs.length > 0 ? (
         <div className="rounded-2xl border border-line bg-panel p-5 shadow-sm">
           <p className="mb-3 text-small font-bold">Sesi terakhir</p>
           <div className="space-y-2">
@@ -211,6 +218,13 @@ export default async function ParentReportsPage() {
               </div>
             ))}
           </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-line bg-panel p-5 text-center shadow-sm">
+          <p className="text-small font-semibold">Belum ada catatan sesi</p>
+          <p className="mt-1 text-tiny text-ink-soft">
+            {athlete.fullName} belum mengikuti sesi yang tercatat.
+          </p>
         </div>
       )}
     </div>
